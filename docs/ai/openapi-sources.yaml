@@ -1,0 +1,4 @@
+# Map each repo to one or more OpenAPI/Swagger spec paths relative to that repo root.
+# Populated when teams convention paths; collect-openapi.sh copies into .contractmesh/generated/openapi/.
+version: 1
+specs: {}

@@ -1,0 +1,42 @@
+name: monorepo-workspace
+mode: monorepo
+workspace_mapping_version: v3
+repos:
+  - path: .
+    name: workspace
+  - path: services/billing-api
+    name: billing-api
+  - path: services/inventory-api
+    name: inventory-api
+  - path: apps/admin-web
+    name: admin-web
+docs:
+  contracts:
+    - docs/contracts
+  adrs:
+    - docs/adrs
+  gaps:
+    - docs/known-gaps.md
+lint:
+  require_owner: true
+  require_ids: true
+  require_valid_crosslinks: true
+index:
+  mode: allowlist
+  include:
+    - docs/**
+    - README.md
+    - billing-api:src/**
+    - billing-api:tests/**
+    - inventory-api:src/**
+    - inventory-api:tests/**
+    - admin-web:src/**
+  # Optional exclude on top of allowlist + .contractmeshignore:
+  # exclude:
+  #   - "**/secrets/**"
+  #   - "**/*.tfvars"
+  # Denylist is available only when deliberately configured.
+  # See docs/manifest-reference.md
+#
+# Debug: contractmesh index --explain PATH
+#        contractmesh index --show-policy

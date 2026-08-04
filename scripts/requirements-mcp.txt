@@ -1,0 +1,2 @@
+# MCP server for workspace-knowledge (Python 3.10+)
+mcp>=1.2.0

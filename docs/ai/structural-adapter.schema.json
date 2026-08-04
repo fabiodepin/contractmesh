@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contractmesh.local/schemas/structural-adapter-v1.json",
+  "title": "Structural adapter payload",
+  "type": "object",
+  "required": ["adapter_id", "edges"],
+  "properties": {
+    "adapter_id": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["edge_type", "source", "target", "repo", "source_type", "trust_level"],
+        "properties": {
+          "edge_type": { "type": "string" },
+          "source": { "type": "string" },
+          "target": { "type": "string" },
+          "repo": { "type": "string" },
+          "path": { "type": "string" },
+          "detail": { "type": "string" },
+          "source_type": { "const": "adapter" },
+          "trust_level": { "const": "inferred" }
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "repo": { "type": "string" }
+        }
+      }
+    }
+  }
+}

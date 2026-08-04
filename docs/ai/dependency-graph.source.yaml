@@ -1,0 +1,4 @@
+# Curated dependency edges between workspace repos (consumer -> dependency).
+# Replace with your real workspace dependencies.
+version: 1
+edges: []

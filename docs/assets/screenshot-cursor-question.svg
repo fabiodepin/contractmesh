@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760">
+  <rect width="1280" height="760" rx="18" fill="#0b1020"/>
+  <rect x="24" y="24" width="244" height="712" rx="12" fill="#111827" stroke="#283247"/>
+  <text x="48" y="68" font-family="Inter, Arial" font-size="18" fill="#e5edf7" font-weight="700">ContractMesh</text>
+  <text x="48" y="108" font-family="Menlo, monospace" font-size="13" fill="#8fa3bf">workspace-knowledge</text>
+  <rect x="44" y="138" width="184" height="32" rx="8" fill="#1f2937"/>
+  <text x="58" y="159" font-family="Menlo, monospace" font-size="13" fill="#9ee6b5">index_status</text>
+  <rect x="44" y="180" width="184" height="32" rx="8" fill="#1f2937"/>
+  <text x="58" y="201" font-family="Menlo, monospace" font-size="13" fill="#9ee6b5">fetch_hits</text>
+  <rect x="44" y="222" width="184" height="32" rx="8" fill="#1f2937"/>
+  <text x="58" y="243" font-family="Menlo, monospace" font-size="13" fill="#9ee6b5">get_chunk</text>
+
+  <rect x="292" y="24" width="964" height="712" rx="12" fill="#0f172a" stroke="#283247"/>
+  <text x="326" y="68" font-family="Inter, Arial" font-size="18" fill="#e5edf7" font-weight="700">Cursor chat</text>
+  <text x="326" y="96" font-family="Inter, Arial" font-size="14" fill="#93a4b8">MCP grounded workspace question</text>
+
+  <rect x="326" y="144" width="856" height="136" rx="14" fill="#1e293b" stroke="#3b4b66"/>
+  <text x="354" y="184" font-family="Inter, Arial" font-size="21" fill="#f8fafc">How does billing-api enforce support priority using</text>
+  <text x="354" y="214" font-family="Inter, Arial" font-size="21" fill="#f8fafc">inventory-api context?</text>
+  <text x="354" y="250" font-family="Menlo, monospace" font-size="14" fill="#a5b4fc">@workspace-knowledge · fetch_hits · contracts + anchors</text>
+
+  <rect x="326" y="306" width="856" height="306" rx="14" fill="#111827" stroke="#2f3b52"/>
+  <text x="354" y="346" font-family="Inter, Arial" font-size="18" fill="#e5edf7" font-weight="700">Agent retrieval plan</text>
+  <text x="354" y="388" font-family="Menlo, monospace" font-size="15" fill="#d6deeb">1. index_status()</text>
+  <text x="354" y="422" font-family="Menlo, monospace" font-size="15" fill="#d6deeb">2. fetch_hits("billing inventory support priority", kind=["contract"])</text>
+  <text x="354" y="456" font-family="Menlo, monospace" font-size="15" fill="#d6deeb">3. Follow related code anchors</text>
+  <text x="354" y="490" font-family="Menlo, monospace" font-size="15" fill="#d6deeb">4. Answer with sources consulted</text>
+  <rect x="354" y="532" width="304" height="42" rx="21" fill="#12352a" stroke="#2da86d"/>
+  <text x="382" y="559" font-family="Inter, Arial" font-size="15" fill="#9ee6b5">No direct code read needed</text>
+</svg>
