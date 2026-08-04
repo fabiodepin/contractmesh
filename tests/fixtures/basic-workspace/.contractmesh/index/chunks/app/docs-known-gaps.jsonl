@@ -1,0 +1,1 @@
+{"chunk_id": "doc:app:docs:known-gaps#0", "doc_id": "doc:app:docs:known-gaps", "title": "Known gaps", "heading": "Known gaps", "text": "# Known gaps\n\n| Gap ID | Status | Description |\n| --- | --- | --- |\n| APP-KG-001 | Open | Example gap linked to APP-CONTRACT-001 for index smoke tests. |"}

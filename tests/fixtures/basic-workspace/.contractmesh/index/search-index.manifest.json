@@ -1,0 +1,306 @@
+{
+  "schema_version": 3,
+  "workspace_mapping_version": "v3",
+  "generated_at": "2026-08-04T00:21:10Z",
+  "document_count": 6,
+  "documents": [
+    {
+      "id": "doc:app:docs:known-gaps",
+      "repo": "app",
+      "path": "docs/known-gaps.md",
+      "kind": "known_gaps",
+      "title": "Known gaps",
+      "headings": [
+        "Known gaps"
+      ],
+      "keywords": [
+        "app",
+        "known_gaps",
+        "known-gaps",
+        "known",
+        "gaps"
+      ],
+      "known_gap_ids": [
+        "APP-KG-001"
+      ],
+      "links": {
+        "related": []
+      },
+      "weight": 90,
+      "chunking": {
+        "strategy": "markdown-heading-v1"
+      },
+      "embedding": {
+        "status": "pending",
+        "model": null,
+        "dimensions": null
+      },
+      "domain": "known-gaps",
+      "source_type": "known_gap",
+      "trust_level": "known_risk"
+    },
+    {
+      "id": "doc:app:docs:contracts:example-contract",
+      "repo": "app",
+      "path": "docs/contracts/example-contract.md",
+      "kind": "contract",
+      "title": "Example application contract",
+      "headings": [
+        "Example application contract",
+        "Responsibilities",
+        "Non-responsibilities",
+        "Inputs",
+        "Outputs",
+        "Known gaps"
+      ],
+      "keywords": [
+        "app",
+        "contract",
+        "example-contract",
+        "example",
+        "application",
+        "001",
+        "draft",
+        "team",
+        "team@example.com",
+        "exampleservice"
+      ],
+      "known_gap_ids": [
+        "APP-KG-001"
+      ],
+      "links": {
+        "related": []
+      },
+      "weight": 80,
+      "chunking": {
+        "strategy": "markdown-heading-v1"
+      },
+      "embedding": {
+        "status": "pending",
+        "model": null,
+        "dimensions": null
+      },
+      "domain": "example-contract",
+      "external_id": "APP-CONTRACT-001",
+      "status": "draft",
+      "owner": {
+        "team": "app-team",
+        "service": "app",
+        "domain": "app",
+        "contact": "app-team@example.com"
+      },
+      "related_anchors": [
+        "ExampleService"
+      ],
+      "source_type": "contract",
+      "trust_level": "draft",
+      "code_anchors": [
+        "anchor:app:src/example.py#ExampleService"
+      ]
+    },
+    {
+      "id": "doc:app:docs:adrs:example-adr",
+      "repo": "app",
+      "path": "docs/adrs/example-adr.md",
+      "kind": "doc",
+      "title": "Example architectural decision",
+      "headings": [
+        "ADR-APP-001: Example architectural decision",
+        "Context",
+        "Decision",
+        "Consequences"
+      ],
+      "keywords": [
+        "app",
+        "doc",
+        "example",
+        "architectural",
+        "decision",
+        "adr",
+        "001",
+        "proposed",
+        "team",
+        "team@example.com",
+        "contract"
+      ],
+      "known_gap_ids": [],
+      "links": {
+        "related": []
+      },
+      "weight": 55,
+      "chunking": {
+        "strategy": "markdown-heading-v1"
+      },
+      "embedding": {
+        "status": "pending",
+        "model": null,
+        "dimensions": null
+      },
+      "external_id": "ADR-APP-001",
+      "status": "proposed",
+      "owner": {
+        "team": "app-team",
+        "service": "app",
+        "domain": "app",
+        "contact": "app-team@example.com"
+      },
+      "related_contracts": [
+        "APP-CONTRACT-001"
+      ],
+      "source_type": "contract",
+      "trust_level": "confirmed"
+    },
+    {
+      "id": "doc:app:docs:adrs:example-adr",
+      "repo": "app",
+      "path": "docs/adrs/example-adr.md",
+      "kind": "doc",
+      "title": "Example architectural decision",
+      "headings": [
+        "ADR-APP-001: Example architectural decision",
+        "Context",
+        "Decision",
+        "Consequences"
+      ],
+      "keywords": [
+        "app",
+        "doc",
+        "example",
+        "architectural",
+        "decision",
+        "adr",
+        "001",
+        "proposed",
+        "team",
+        "team@example.com",
+        "contract"
+      ],
+      "known_gap_ids": [],
+      "links": {
+        "related": []
+      },
+      "weight": 55,
+      "chunking": {
+        "strategy": "markdown-heading-v1"
+      },
+      "embedding": {
+        "status": "pending",
+        "model": null,
+        "dimensions": null
+      },
+      "external_id": "ADR-APP-001",
+      "status": "proposed",
+      "owner": {
+        "team": "app-team",
+        "service": "app",
+        "domain": "app",
+        "contact": "app-team@example.com"
+      },
+      "related_contracts": [
+        "APP-CONTRACT-001"
+      ],
+      "source_type": "contract",
+      "trust_level": "confirmed"
+    },
+    {
+      "id": "anchor:app:src/example.py#ExampleService",
+      "repo": "app",
+      "path": "src/example.py",
+      "kind": "code_anchor",
+      "symbol": "ExampleService",
+      "anchor_type": "service",
+      "language": "python",
+      "title": "ExampleService (app)",
+      "headings": [
+        "ExampleService"
+      ],
+      "keywords": [
+        "app",
+        "code_anchor",
+        "exampleservice",
+        "service",
+        "python"
+      ],
+      "known_gap_ids": [],
+      "links": {
+        "related": []
+      },
+      "weight": 58,
+      "chunking": {
+        "strategy": "code-anchor-v1"
+      },
+      "embedding": {
+        "status": "pending",
+        "model": null,
+        "dimensions": null
+      },
+      "line_start": 4,
+      "line_end": 10,
+      "source_type": "code_anchor",
+      "trust_level": "implementation",
+      "related_doc_ids": [
+        "doc:app:docs:contracts:example-contract"
+      ]
+    },
+    {
+      "id": "anchor:app:tests/test_example.py#TestExampleService",
+      "repo": "app",
+      "path": "tests/test_example.py",
+      "kind": "test_anchor",
+      "symbol": "TestExampleService",
+      "anchor_type": "test",
+      "language": "py",
+      "title": "TestExampleService (app)",
+      "headings": [
+        "TestExampleService"
+      ],
+      "keywords": [
+        "app",
+        "code_anchor",
+        "testexampleservice",
+        "test",
+        "py"
+      ],
+      "known_gap_ids": [],
+      "links": {
+        "related": []
+      },
+      "weight": 58,
+      "chunking": {
+        "strategy": "code-anchor-v1"
+      },
+      "embedding": {
+        "status": "pending",
+        "model": null,
+        "dimensions": null
+      },
+      "line_start": 1,
+      "line_end": 16,
+      "source_type": "test_anchor",
+      "trust_level": "implementation"
+    }
+  ],
+  "build_stats": {
+    "contracts_with_code_anchors": 1,
+    "anchors_with_related_doc_ids": 1,
+    "contract_symbols_unresolved_total": 0,
+    "contract_symbols_unresolved_unique": 0,
+    "crosslink_source_kinds": [
+      "adr",
+      "architecture",
+      "contract",
+      "integrations"
+    ],
+    "structural_edge_count": 0,
+    "drift_finding_count": 0,
+    "evolution_link_count": 0,
+    "index_flags": {
+      "structural_graph": false,
+      "git_mining": false,
+      "embeddings": false,
+      "openapi": false,
+      "drift": false,
+      "adapters": []
+    }
+  }
+}

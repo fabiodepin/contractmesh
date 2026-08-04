@@ -1,0 +1,38 @@
+# Generated workspace artifacts (never commit)
+.contractmesh/index/
+.contractmesh/cache/
+.contractmesh/generated/
+.contractmesh/mcp/
+
+.DS_Store
+
+# Local Python environments
+.venv/
+scripts/.venv-mcp/
+
+# Local MCP client configuration
+.cursor/mcp.json
+
+# Python bytecode and packaging artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+
+# Optional local tooling caches
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local env overrides (secrets); keep only env/local/.gitignore tracked
+env/local/*
+!env/local/.gitignore
+
+# Runtime state from maintainer tooling sessions
+.workspace/
+
+# Local git for fixture tests (created by test harness)
+tests/fixtures/basic-workspace/.git/

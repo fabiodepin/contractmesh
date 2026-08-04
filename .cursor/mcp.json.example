@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "workspace-knowledge": {
+      "command": "/absolute/path/to/contractmesh/scripts/.venv-mcp/bin/python",
+      "args": [
+        "/absolute/path/to/contractmesh/scripts/mcp-workspace-knowledge.py"
+      ],
+      "env": {
+        "WORKSPACE_ROOT": "/absolute/path/to/contractmesh",
+        "WORKSPACE_REPO": "contractmesh"
+      },
+      "cwd": "/absolute/path/to/contractmesh"
+    }
+  }
+}

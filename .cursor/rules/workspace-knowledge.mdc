@@ -1,0 +1,51 @@
+---
+description: ContractMesh workspace-knowledge MCP flow for cross-repo, architecture, integration and gap questions
+alwaysApply: true
+---
+
+# Workspace knowledge (MCP)
+
+For cross-repo, integration, architecture, contract or known-gap questions:
+
+## Required flow
+
+1. Call `index_status` first. If `recommend_rebuild` is true or `missing_chunks_count` > 0, ask the user to run `contractmesh index`.
+2. Use `fetch_hits` as the primary retrieval call.
+3. If `fetch_hits` returns `truncated: true`, use `get_chunk(chunk_id)` or `get_doc_chunks(doc_id)` for the missing text.
+4. Use `search_docs` only for broader exploration or symbol-only lookup.
+5. Read files directly only when the index is insufficient.
+6. Mention workspace-relative `path` values in answers. Do not persist `chunk_id` values in human docs.
+7. Prefer sources with higher `trust_level` when they conflict (`confirmed` > `accepted` > `known_risk` > `detected_mismatch` > `implementation` > `inferred` > `suggestion`).
+8. Cite `trust_level` in `Sources consulted` when MCP returns it.
+
+## Examples
+
+- Cross-repo: `fetch_hits("example greeting behavior", kind=["contract"], repo=["app","web"])`
+- Gap: `fetch_hits(gap="APP-KG-001")`
+- Symbol: `fetch_hits("ExampleService", kind=["code_anchor"], include_main_chunk=false)`
+- PR review: `pr_impact(base="main", head="HEAD")`
+- Before editing code: `preflight_change(symbol="ExampleService.greet")`
+
+## Preflight (before patching)
+
+1. Call `preflight_change(symbol="ClassName" or "ClassName.method")` before editing indexed symbols.
+2. Read `card.text` first (Risk, Why, Review, Run). Use `details` only when you need full evidence.
+3. If `agent_policy.requires_confirmation` is true (typically `risk: HIGH`), **stop and ask the user to confirm** they reviewed the listed contracts/gaps/tests. Do not patch until confirmed.
+4. Risk thresholds come from `contractmesh.yml` → `preflight:`.
+
+## Sources consulted
+
+For cross-repo answers, finish with:
+
+```text
+Sources consulted:
+
+Docs/contracts:
+- docs/contracts/example-contract.md (trust: confirmed)
+
+Code anchors:
+- src/example.py (trust: implementation)
+
+Direct code reads:
+- (none)
+```

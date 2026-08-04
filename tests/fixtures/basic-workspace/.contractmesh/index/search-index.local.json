@@ -1,0 +1,49 @@
+{
+  "schema_version": 3,
+  "generator": "build-search-index.sh",
+  "missing_repos": [],
+  "documents": [
+    {
+      "id": "doc:app:docs:known-gaps",
+      "content_hash": "sha256:35f90d8487688af08d1312802dcbbe1c8030c1ad789d0f98a4a34cde20487241",
+      "absolute_path": "/Users/fabiodepin/Projetos/contractmesh/tests/fixtures/basic-workspace/docs/known-gaps.md",
+      "chunk_count": 1,
+      "chunk_path": ".contractmesh/index/chunks/app/docs-known-gaps.jsonl"
+    },
+    {
+      "id": "doc:app:docs:contracts:example-contract",
+      "content_hash": "sha256:3e6b6c4db40e4e45670d63410a510fe38057bd51be66c977a6a8513f0882fc80",
+      "absolute_path": "/Users/fabiodepin/Projetos/contractmesh/tests/fixtures/basic-workspace/docs/contracts/example-contract.md",
+      "chunk_count": 6,
+      "chunk_path": ".contractmesh/index/chunks/app/docs-contracts-example-contract.jsonl"
+    },
+    {
+      "id": "doc:app:docs:adrs:example-adr",
+      "content_hash": "sha256:99664f0a4709310c4fdb0a55402b8cc6a10957d76be7e2061aa82731a8483f3c",
+      "absolute_path": "/Users/fabiodepin/Projetos/contractmesh/tests/fixtures/basic-workspace/docs/adrs/example-adr.md",
+      "chunk_count": 1,
+      "chunk_path": ".contractmesh/index/chunks/app/docs-adrs-example-adr.jsonl"
+    },
+    {
+      "id": "doc:app:docs:adrs:example-adr",
+      "content_hash": "sha256:99664f0a4709310c4fdb0a55402b8cc6a10957d76be7e2061aa82731a8483f3c",
+      "absolute_path": "/Users/fabiodepin/Projetos/contractmesh/tests/fixtures/basic-workspace/docs/adrs/example-adr.md",
+      "chunk_count": 1,
+      "chunk_path": ".contractmesh/index/chunks/app/docs-adrs-example-adr.jsonl"
+    },
+    {
+      "id": "anchor:app:src/example.py#ExampleService",
+      "content_hash": "sha256:7eb3e35df28cc8b49f73bb8ee7d7f3bde867dcf5c631a3d4c32eb7296aca27b7",
+      "absolute_path": "/Users/fabiodepin/Projetos/contractmesh/tests/fixtures/basic-workspace/src/example.py",
+      "chunk_count": 1,
+      "chunk_path": ".contractmesh/index/chunks/app/app-anchor-src-example-py-ExampleService.jsonl"
+    },
+    {
+      "id": "anchor:app:tests/test_example.py#TestExampleService",
+      "content_hash": "sha256:116b345ed1aa1fb1c8997fa74f58f6b7f329cc7a9aa764d4088286d8683ca62c",
+      "absolute_path": "/Users/fabiodepin/Projetos/contractmesh/tests/fixtures/basic-workspace/tests/test_example.py",
+      "chunk_count": 1,
+      "chunk_path": ".contractmesh/index/chunks/app/app-anchor-tests-test_example-py-TestExampleService.jsonl"
+    }
+  ]
+}

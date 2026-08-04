@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "contractmesh"
+version = "0.1.6"
+description = "Trust-aware engineering knowledge layer for AI agents."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "ContractMesh contributors" }]
+keywords = ["ai-agents", "mcp", "knowledge", "retrieval", "architecture", "provenance"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Documentation",
+  "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = []
+
+[project.optional-dependencies]
+# FastMCP API used by contractmesh.mcp.server — mcp 2.x removed mcp.server.fastmcp.
+mcp = ["mcp>=1.2.0,<2"]
+
+[project.urls]
+Homepage = "https://github.com/fabiodepin/contractmesh"
+Documentation = "https://github.com/fabiodepin/contractmesh#readme"
+Repository = "https://github.com/fabiodepin/contractmesh"
+Issues = "https://github.com/fabiodepin/contractmesh/issues"
+
+[project.scripts]
+contractmesh = "contractmesh.cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["contractmesh*"]
+
+[tool.setuptools.package-data]
+contractmesh = ["templates/**/*"]

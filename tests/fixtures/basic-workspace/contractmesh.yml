@@ -1,0 +1,24 @@
+name: example-app
+mode: basic
+workspace_mapping_version: v3
+repos:
+  - path: .
+    name: app
+docs:
+  contracts:
+    - docs/contracts
+  adrs:
+    - docs/adrs
+  gaps:
+    - docs/known-gaps.md
+lint:
+  require_owner: true
+  require_ids: true
+  require_valid_crosslinks: true
+index:
+  mode: allowlist
+  include:
+    - src/**
+    - tests/**
+    - docs/**
+    - README.md

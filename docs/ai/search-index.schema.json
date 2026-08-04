@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contractmesh.local/schemas/search-index-v3.json",
+  "title": "Workspace search index (v3)",
+  "description": "Light contract for .contractmesh/index/search-index.manifest.json and search-index.local.json.",
+  "oneOf": [
+    { "$ref": "#/$defs/manifest" },
+    { "$ref": "#/$defs/localIndex" }
+  ],
+  "$defs": {
+    "sourceType": {
+      "type": "string",
+      "enum": [
+        "contract",
+        "adr",
+        "known_gap",
+        "code_anchor",
+        "test_anchor",
+        "structural_graph",
+        "openapi",
+        "git_mining",
+        "embedding",
+        "drift",
+        "adapter"
+      ]
+    },
+    "trustLevel": {
+      "type": "string",
+      "enum": [
+        "confirmed",
+        "accepted",
+        "draft",
+        "known_risk",
+        "detected_mismatch",
+        "implementation",
+        "inferred",
+        "suggestion"
+      ]
+    },
+    "manifest": {
+      "type": "object",
+      "required": ["schema_version", "workspace_mapping_version", "documents"],
+      "properties": {
+        "schema_version": { "const": 3 },
+        "workspace_mapping_version": { "type": "string" },
+        "generated_at": { "type": "string" },
+        "document_count": { "type": "integer", "minimum": 0 },
+        "structural_edges": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/structuralEdge" }
+        },
+        "drift_findings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/driftFinding" }
+        },
+        "evolution_links": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evolutionLink" }
+        },
+        "documents": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/manifestDocument" }
+        }
+      }
+    },
+    "localIndex": {
+      "type": "object",
+      "required": ["schema_version", "generator", "documents"],
+      "properties": {
+        "schema_version": { "const": 3 },
+        "generator": { "type": "string" },
+        "missing_repos": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "documents": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/localDocument" }
+        }
+      }
+    },
+    "manifestDocument": {
+      "type": "object",
+      "required": [
+        "id",
+        "repo",
+        "path",
+        "kind",
+        "title",
+        "keywords",
+        "known_gap_ids",
+        "links",
+        "weight",
+        "chunking",
+        "embedding",
+        "source_type",
+        "trust_level"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "symbol": { "type": "string" },
+        "anchor_type": { "type": "string" },
+        "language": { "type": "string" },
+        "line_start": { "type": "integer", "minimum": 1 },
+        "line_end": { "type": "integer", "minimum": 1 },
+        "repo": { "type": "string" },
+        "path": { "type": "string" },
+        "kind": { "type": "string" },
+        "domain": { "type": "string" },
+        "role": { "type": ["string", "null"] },
+        "external_id": { "type": "string" },
+        "status": { "type": "string" },
+        "source_type": { "$ref": "#/$defs/sourceType" },
+        "trust_level": { "$ref": "#/$defs/trustLevel" },
+        "owner": {
+          "type": "object",
+          "properties": {
+            "team": { "type": "string" },
+            "service": { "type": "string" },
+            "domain": { "type": "string" },
+            "contact": { "type": "string" }
+          }
+        },
+        "related_contracts": { "type": "array", "items": { "type": "string" } },
+        "related_anchors": { "type": "array", "items": { "type": "string" } },
+        "title": { "type": "string" },
+        "headings": { "type": "array", "items": { "type": "string" }, "maxItems": 20 },
+        "keywords": { "type": "array", "items": { "type": "string" }, "maxItems": 30 },
+        "known_gap_ids": { "type": "array", "items": { "type": "string" } },
+        "code_anchors": { "type": "array", "items": { "type": "string" } },
+        "related_doc_ids": { "type": "array", "items": { "type": "string" } },
+        "links": {
+          "type": "object",
+          "properties": {
+            "agents": { "type": "string" },
+            "contracts_readme": { "type": "string" },
+            "related": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "weight": { "type": "integer" },
+        "chunking": {
+          "type": "object",
+          "required": ["strategy"],
+          "properties": {
+            "strategy": { "type": "string" }
+          }
+        },
+        "embedding": {
+          "type": "object",
+          "properties": {
+            "status": { "type": "string" },
+            "model": { "type": ["string", "null"] },
+            "dimensions": { "type": ["integer", "null"] }
+          }
+        }
+      }
+    },
+    "structuralEdge": {
+      "type": "object",
+      "required": ["edge_type", "source", "target", "repo", "source_type", "trust_level"],
+      "properties": {
+        "edge_type": {
+          "type": "string",
+          "enum": ["imports", "implements_route", "uses_service", "uses_repository"]
+        },
+        "source": { "type": "string" },
+        "target": { "type": "string" },
+        "repo": { "type": "string" },
+        "path": { "type": "string" },
+        "detail": { "type": "string" },
+        "source_type": { "const": "structural_graph" },
+        "trust_level": { "const": "inferred" }
+      }
+    },
+    "driftFinding": {
+      "type": "object",
+      "required": ["drift_type", "source_type", "trust_level", "summary"],
+      "properties": {
+        "drift_type": {
+          "type": "string",
+          "enum": [
+            "contract_vs_code",
+            "contract_vs_openapi",
+            "contract_vs_frontend",
+            "anchor_unresolved",
+            "contract_vs_behavior"
+          ]
+        },
+        "summary": { "type": "string" },
+        "contract_id": { "type": "string" },
+        "path": { "type": "string" },
+        "repo": { "type": "string" },
+        "source_type": { "const": "drift" },
+        "trust_level": { "const": "detected_mismatch" }
+      }
+    },
+    "evolutionLink": {
+      "type": "object",
+      "required": ["link_type", "source", "target", "source_type", "trust_level"],
+      "properties": {
+        "link_type": {
+          "type": "string",
+          "enum": ["introduced_in", "modified_by", "decided_in", "validated_by", "migration"]
+        },
+        "source": { "type": "string" },
+        "target": { "type": "string" },
+        "repo": { "type": "string" },
+        "path": { "type": "string" },
+        "source_type": { "type": "string" },
+        "trust_level": { "type": "string" }
+      }
+    },
+    "localDocument": {
+      "type": "object",
+      "required": ["id", "content_hash", "absolute_path", "chunk_count", "chunk_path"],
+      "properties": {
+        "id": { "type": "string" },
+        "content_hash": { "type": "string", "pattern": "^sha256:" },
+        "absolute_path": { "type": "string" },
+        "chunk_count": { "type": "integer", "minimum": 0 },
+        "chunk_path": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,93 @@
+# ContractMesh index exclusions (denylist).
+# The local index is the security boundary for MCP agents — excluded paths are
+# not indexed. See docs/security-privacy.md.
+# Future: index.mode: allowlist in contractmesh.yml for enterprise workspaces.
+
+# Secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.kdb
+*.asc
+*.gpg
+
+# Common secret files
+secrets/
+credentials/
+vault/
+private/
+keys/
+
+# Cloud credentials
+.aws/
+.azure/
+.gcp/
+.config/gcloud/
+*.tfvars
+terraform.tfstate*
+*.tfstate.*
+
+# Kubernetes and containers
+kubeconfig
+.kube/
+docker-compose.override.yml
+
+# CI/CD secrets
+.github/workflows/*.secrets.yml
+.gitlab-ci*.local.yml
+
+# Package manager auth
+.npmrc
+.yarnrc
+.pypirc
+.poetry.toml
+pip.conf
+
+# SSH
+.ssh/
+id_rsa
+id_ed25519
+known_hosts
+
+# Build artifacts
+node_modules/
+dist/
+build/
+target/
+coverage/
+.cache/
+.next/
+.nuxt/
+.gradle/
+out/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Java
+.mvn/
+*.class
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+
+# Logs
+*.log
+
+# ContractMesh internals
+.contractmesh/index/
+.contractmesh/cache/
+.contractmesh/generated/
