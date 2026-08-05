@@ -251,18 +251,49 @@ def add_metadata_keywords(keywords: list[str], meta: dict) -> list[str]:
     return out[:MAX_KEYWORDS]
 
 
-def infer_kind(rel_path: str, basename: str, is_workspace: bool) -> str:
+def infer_kind(
+    rel_path: str,
+    basename: str,
+    is_workspace: bool,
+    *,
+    adr_roots: list[str] | None = None,
+    contract_roots: list[str] | None = None,
+) -> str:
     lower = basename.lower()
     if lower in KNOWN_KIND_BY_BASENAME:
         return KNOWN_KIND_BY_BASENAME[lower]
     norm = rel_path.replace("\\", "/").lower()
+    for root in adr_roots or ("docs/adrs", "docs/adr"):
+        root_n = root.strip("/").lower()
+        if lower.endswith(".md") and (norm == root_n or norm.startswith(root_n + "/")):
+            return "adr"
+    for root in contract_roots or ("docs/contracts",):
+        root_n = root.strip("/").lower()
+        if (
+            lower.endswith(".md")
+            and lower != "readme.md"
+            and (norm == root_n or norm.startswith(root_n + "/"))
+        ):
+            return "contract"
+    # Legacy path heuristics when roots were not provided.
     if "/docs/adrs/" in norm and lower.endswith(".md"):
+        return "adr"
+    if "/docs/adr/" in norm and lower.endswith(".md"):
         return "adr"
     if "/contracts/" in norm and lower.endswith(".md") and lower != "readme.md":
         return "contract"
     if is_workspace:
         return "workspace_doc"
     return "doc"
+
+
+def manifest_doc_roots(manifest: dict[str, Any] | None) -> dict[str, list[str]]:
+    docs = (manifest or {}).get("docs") or {}
+    return {
+        "contracts": [str(x).strip().strip("/") for x in (docs.get("contracts") or []) if str(x).strip()],
+        "adrs": [str(x).strip().strip("/") for x in (docs.get("adrs") or []) if str(x).strip()],
+        "gaps": [str(x).strip().strip("/") for x in (docs.get("gaps") or []) if str(x).strip()],
+    }
 
 
 def infer_domain(rel_path: str, kind: str) -> str | None:
@@ -378,12 +409,21 @@ def index_markdown_file(
     roles: dict[str, str],
     chunks_root: Path,
     repo_root_rel: str | None = None,
+    *,
+    adr_roots: list[str] | None = None,
+    contract_roots: list[str] | None = None,
 ) -> tuple[dict, dict, int]:
     raw_text = abs_path.read_text(encoding="utf-8", errors="replace")
     front_matter, text = parse_front_matter(raw_text)
     basename = abs_path.name
     is_workspace = repo == WORKSPACE_REPO
-    kind = infer_kind(rel_path, basename, is_workspace)
+    kind = infer_kind(
+        rel_path,
+        basename,
+        is_workspace,
+        adr_roots=adr_roots,
+        contract_roots=contract_roots,
+    )
     domain = infer_domain(rel_path, kind)
     title, headings = parse_markdown_meta(text, Path(basename).stem.replace("-", " ").title())
     if front_matter.get("title"):
@@ -457,28 +497,56 @@ def index_markdown_file(
     return manifest_doc, local_doc, len(raw_chunks)
 
 
-def collect_workspace_docs(
+def _walk_markdown_tree(
     workspace: Path,
-    policy: IndexPolicy | None = None,
-) -> list[tuple[Path, str]]:
-    found: list[tuple[Path, str]] = []
-    policy = policy or load_index_policy(workspace)
-    docs_dir = workspace / "docs"
-    if not docs_dir.is_dir():
-        return found
-    for root, dirnames, files in os.walk(docs_dir):
-        if "generated" in Path(root).parts:
+    root: Path,
+    policy: IndexPolicy,
+    found: list[tuple[Path, str]],
+    seen: set[str],
+) -> None:
+    if not root.is_dir():
+        return
+    for dirpath, dirnames, files in os.walk(root):
+        if "generated" in Path(dirpath).parts:
             dirnames[:] = []
             continue
-        policy.prune_walk_dirs(Path(root), dirnames)
+        policy.prune_walk_dirs(Path(dirpath), dirnames)
         for name in files:
             if not name.endswith(".md"):
                 continue
-            abs_path = Path(root) / name
+            abs_path = Path(dirpath) / name
             rel = abs_path.relative_to(workspace).as_posix()
-            if policy.ignores(rel):
+            if rel in seen or policy.ignores(rel):
                 continue
+            seen.add(rel)
             found.append((abs_path, rel))
+
+
+def collect_workspace_docs(
+    workspace: Path,
+    policy: IndexPolicy | None = None,
+    *,
+    manifest: dict[str, Any] | None = None,
+) -> list[tuple[Path, str]]:
+    found: list[tuple[Path, str]] = []
+    seen: set[str] = set()
+    policy = policy or load_index_policy(workspace)
+    ws_manifest = manifest if manifest is not None else load_workspace_manifest(workspace)
+    roots = manifest_doc_roots(ws_manifest)
+
+    # Broad docs/ tree (markdown only) plus explicit manifest roots (may live outside docs/).
+    docs_dir = workspace / "docs"
+    _walk_markdown_tree(workspace, docs_dir, policy, found, seen)
+    for key in ("contracts", "adrs"):
+        for rel_root in roots[key]:
+            _walk_markdown_tree(workspace, workspace / rel_root, policy, found, seen)
+    for rel_gap in roots["gaps"]:
+        gap_path = workspace / rel_gap
+        if gap_path.is_file() and gap_path.suffix == ".md":
+            rel = gap_path.relative_to(workspace).as_posix()
+            if rel not in seen and not policy.ignores(rel):
+                seen.add(rel)
+                found.append((gap_path, rel))
     return found
 
 
@@ -486,8 +554,11 @@ def collect_repo_docs(
     workspace: Path,
     spec: RepoSpec,
     policy: IndexPolicy | None = None,
+    *,
+    manifest: dict[str, Any] | None = None,
 ) -> list[tuple[Path, str]]:
     found: list[tuple[Path, str]] = []
+    seen: set[str] = set()
     policy = policy or load_index_policy(workspace)
     base = workspace / spec.rel_path
     if not base.is_dir():
@@ -497,32 +568,36 @@ def collect_repo_docs(
     if agents.is_file():
         rel = agents.relative_to(workspace).as_posix()
         if not policy.ignores(rel):
+            seen.add(rel)
             found.append((agents, rel))
 
     ai_dir = base / "docs" / "ai"
-    if ai_dir.is_dir():
-        for root, dirnames, files in os.walk(ai_dir):
-            policy.prune_walk_dirs(Path(root), dirnames)
-            for name in files:
-                if not name.endswith(".md"):
-                    continue
-                abs_path = Path(root) / name
-                rel = abs_path.relative_to(workspace).as_posix()
-                if policy.ignores(rel):
-                    continue
-                found.append((abs_path, rel))
-    adrs_dir = base / "docs" / "adrs"
-    if adrs_dir.is_dir():
-        for root, dirnames, files in os.walk(adrs_dir):
-            policy.prune_walk_dirs(Path(root), dirnames)
-            for name in files:
-                if not name.endswith(".md"):
-                    continue
-                abs_path = Path(root) / name
-                rel = abs_path.relative_to(workspace).as_posix()
-                if policy.ignores(rel):
-                    continue
-                found.append((abs_path, rel))
+    _walk_markdown_tree(workspace, ai_dir, policy, found, seen)
+
+    # Workspace-root repo (path: .) is already covered by collect_workspace_docs.
+    # Re-walking manifest docs roots here would duplicate contracts/ADRs/gaps.
+    if spec.rel_path in (".", ""):
+        return found
+
+    ws_manifest = manifest if manifest is not None else load_workspace_manifest(workspace)
+    roots = manifest_doc_roots(ws_manifest)
+    # Nested repo docs: use manifest roots plus common layouts so a workspace-level
+    # rewrite like docs/adr does not hide per-service docs/adrs trees.
+    contract_roots = list(
+        dict.fromkeys([*roots["contracts"], "docs/contracts", "docs/contract"])
+    )
+    adr_roots = list(dict.fromkeys([*roots["adrs"], "docs/adrs", "docs/adr"]))
+    for rel_root in contract_roots:
+        _walk_markdown_tree(workspace, base / rel_root, policy, found, seen)
+    for rel_root in adr_roots:
+        _walk_markdown_tree(workspace, base / rel_root, policy, found, seen)
+    for rel_gap in roots["gaps"]:
+        gap_path = base / rel_gap
+        if gap_path.is_file() and gap_path.suffix == ".md":
+            rel = gap_path.relative_to(workspace).as_posix()
+            if rel not in seen and not policy.ignores(rel):
+                seen.add(rel)
+                found.append((gap_path, rel))
     return found
 
 
@@ -714,20 +789,31 @@ def main() -> int:
             "(fail-closed)"
         )
 
+    doc_roots = manifest_doc_roots(ws_manifest)
+
     manifest_docs: list[dict] = []
     local_docs: list[dict] = []
     total_chunks = 0
 
-    for abs_path, rel in collect_workspace_docs(workspace, policy=policy):
+    for abs_path, rel in collect_workspace_docs(workspace, policy=policy, manifest=ws_manifest):
         m, l, n = index_markdown_file(
-            workspace, abs_path, rel, workspace_repo, roles, chunks_root
+            workspace,
+            abs_path,
+            rel,
+            workspace_repo,
+            roles,
+            chunks_root,
+            adr_roots=doc_roots["adrs"],
+            contract_roots=doc_roots["contracts"],
         )
         manifest_docs.append(m)
         local_docs.append(l)
         total_chunks += n
 
     for spec in repo_specs:
-        for abs_path, rel in collect_repo_docs(workspace, spec, policy=policy):
+        for abs_path, rel in collect_repo_docs(
+            workspace, spec, policy=policy, manifest=ws_manifest
+        ):
             m, l, n = index_markdown_file(
                 workspace,
                 abs_path,
@@ -736,6 +822,8 @@ def main() -> int:
                 roles,
                 chunks_root,
                 repo_root_rel=spec.rel_path,
+                adr_roots=doc_roots["adrs"],
+                contract_roots=doc_roots["contracts"],
             )
             manifest_docs.append(m)
             local_docs.append(l)
@@ -899,6 +987,11 @@ def main() -> int:
     print(f"  files_denied_ignore={policy_stats['files_denied_ignore']}")
     print(f"  dirs_pruned={policy_stats['dirs_pruned']}")
     print(f"  duration={elapsed:.1f}s")
+    print(
+        "Note: allowlist gates which paths may be read; only curated markdown docs "
+        "and code/test anchors enter the index. "
+        "Use `contractmesh index --explain PATH` to see allowed vs indexed_as."
+    )
     if missing_repos:
         print(f"[WARN] missing repos: {', '.join(missing_repos)}")
     return 0

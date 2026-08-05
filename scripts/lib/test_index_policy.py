@@ -94,6 +94,18 @@ class TestGlobCompile(unittest.TestCase):
         self.assertTrue(base.regex.match("certs/server.pem"))
         self.assertTrue(base.regex.match("server.pem"))
 
+    def test_bare_exact_name_is_root_relative_for_policy(self) -> None:
+        root_only = compile_pattern("package.json")
+        self.assertTrue(root_only.regex.match("package.json"))
+        self.assertFalse(root_only.regex.match("server/package.json"))
+        self.assertFalse(root_only.regex.match("server/node_modules/package.json"))
+        any_depth = compile_pattern("**/package.json")
+        self.assertTrue(any_depth.regex.match("package.json"))
+        self.assertTrue(any_depth.regex.match("server/node_modules/package.json"))
+        anchored = compile_pattern("/package.json")
+        self.assertTrue(anchored.regex.match("package.json"))
+        self.assertFalse(anchored.regex.match("apps/web/package.json"))
+
 
 class TestIndexPolicy(unittest.TestCase):
     def test_missing_mode_fails_validation(self) -> None:
@@ -107,6 +119,32 @@ class TestIndexPolicy(unittest.TestCase):
             self.assertTrue(any("index.mode is required" in e for e in errs))
             with self.assertRaises(ValueError):
                 load_index_policy(ws, manifest)
+
+    def test_allowlist_package_json_is_root_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            _write_basic(
+                ws,
+                index_block="""index:
+  mode: allowlist
+  include:
+    - package.json
+    - docs/**
+  exclude:
+    - "**/node_modules/**"
+""",
+            )
+            (ws / "package.json").write_text("{}", encoding="utf-8")
+            (ws / "server" / "node_modules").mkdir(parents=True)
+            (ws / "server" / "node_modules" / "package.json").write_text("{}", encoding="utf-8")
+            policy = load_index_policy(ws)
+            self.assertTrue(policy.allows("package.json", count=False))
+            nested = policy.explain("server/node_modules/package.json")
+            self.assertFalse(nested.allowed)
+            # Root-only include must not match nested package.json (not_included),
+            # even before exclude — avoids implying basename-anywhere allowlist.
+            self.assertEqual(nested.reason, "not_included")
+            self.assertIsNone(nested.matched_include)
 
     def test_explicit_denylist_is_opt_in(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

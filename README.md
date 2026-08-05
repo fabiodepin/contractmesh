@@ -157,7 +157,17 @@ cd ~/projects/my-project
 contractmesh init --here
 ```
 
-`init --here` creates the ContractMesh workspace structure in the current project, including its manifest and initial knowledge locations.
+`init --here` creates the ContractMesh workspace structure in the current
+project: manifest, ignore files, empty knowledge directories, and `.gitignore`
+updates. It does **not** add example code, tests, or demo contracts unless you
+pass `--with-examples`.
+
+In existing projects it also:
+
+- sets `name` from the directory name (not `example-app`);
+- reuses existing knowledge paths when found (for example `docs/adr`);
+- prints candidate allowlist roots that are present but not yet included —
+  without authorizing them automatically.
 
 It does not move or copy your source code.
 
@@ -167,7 +177,14 @@ It does not move or copy your source code.
 contractmesh init --here
 ```
 
-Use this once for each project.
+Use this once for each project. In an existing repository the default is
+brownfield-safe (config + empty knowledge locations only).
+
+For a local smoke scaffold with demo contracts and sample code:
+
+```bash
+contractmesh init --here --with-examples
+```
 
 The generated `contractmesh.yml` manifest defines what belongs to the workspace and what ContractMesh may index.
 
@@ -293,7 +310,7 @@ The following commands create a temporary example workspace without requiring an
 mkdir example-test
 cd example-test
 
-contractmesh init --here --template basic
+contractmesh init --here --template basic --with-examples
 contractmesh index
 contractmesh status
 contractmesh check
@@ -452,7 +469,8 @@ complete tool surface, including optional flag-gated tools.
 
 | Command | Run from | Purpose |
 |---|---|---|
-| `contractmesh init --here` | Project root | Initialize ContractMesh in the current project |
+| `contractmesh init --here` | Project root | Initialize config + empty knowledge dirs (no demo content) |
+| `contractmesh init --here --with-examples` | Empty/demo dir | Also copy scaffold example code, tests, and demo contracts |
 | `contractmesh bootstrap --suggest` | Initialized project | Generate untrusted knowledge drafts for review |
 | `contractmesh index` | Initialized project | Build or refresh the local retrieval index |
 | `contractmesh status` | Initialized project | Inspect workspace and index state |

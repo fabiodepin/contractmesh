@@ -11,9 +11,12 @@ to understand:
 pipx install "contractmesh[mcp]"
 cd /path/to/your-project
 contractmesh init --here
+# edit contractmesh.yml allowlist for your real roots, then:
 contractmesh index
 ```
 
+Default `init` is non-invasive (no example source or demo contracts). Add
+`--with-examples` only for a throwaway scaffold demo.
 The examples below assume that `contractmesh` is available on `PATH`. Set `cwd`
 to the initialized project—not to the ContractMesh source repository.
 If a desktop client does not inherit your shell `PATH`, replace `contractmesh`

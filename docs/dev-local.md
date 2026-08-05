@@ -41,7 +41,7 @@ Or initialize a fresh workspace under `/tmp`:
 
 ```bash
 mkdir -p /tmp/cm-test && cd /tmp/cm-test
-contractmesh init --here --template basic
+contractmesh init --here --template basic --with-examples
 contractmesh index
 contractmesh status
 contractmesh check

@@ -143,6 +143,29 @@ they contain code or docs you want ContractMesh to analyze.
 Use `contractmesh index --show-policy`, `contractmesh index --explain PATH`, or
 `contractmesh status` after the first index to confirm what is in scope.
 
+`--explain` reports two layers:
+
+1. **IndexPolicy** — whether ContractMesh may read the path (`allowed`)
+2. **Collectors** — whether that path becomes a markdown doc or code/test
+   anchor (`indexed_as` / `why_not_indexed`)
+
+Allowlisting a path does not automatically create a search document. Config
+files, Prisma SQL, and most TypeScript sources are security/review boundaries
+unless a collector indexes them.
+
+### Include pattern semantics
+
+| Pattern | Meaning |
+| --- | --- |
+| `package.json` | Workspace-root file only |
+| `/package.json` | Same (explicit root form) |
+| `**/package.json` | Any depth |
+| `*.pem` | Any path segment (wildcard basenames) |
+| `server/src/` | Directory and everything under it |
+
+Bare exact names in `index.include` / `index.exclude` are **root-relative** for
+security clarity. Use `**/name` when any depth is intended.
+
 Monorepo example (repo-scoped globs are relative to that repo path):
 
 ```yaml

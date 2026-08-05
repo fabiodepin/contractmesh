@@ -9,6 +9,7 @@ from pathlib import Path
 
 from contractmesh.engine.build_code_anchors import (
     anchor_id_for,
+    collect_ts_sources,
     extract_java_classes,
     extract_yaml_blocks,
     index_java_file,
@@ -97,6 +98,20 @@ class TestIndexJavaFile(unittest.TestCase):
         parsed_doc_id, idx = parse_chunk_id(chunk_id_for(doc_id, 0))
         self.assertEqual(parsed_doc_id, doc_id)
         self.assertEqual(idx, "0")
+
+
+class TestCollectTsSources(unittest.TestCase):
+    def test_discovers_nested_server_src_curated_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            (ws / "server" / "src").mkdir(parents=True)
+            (ws / "server" / "src" / "AuthService.ts").write_text(
+                "export class AuthService {}\n", encoding="utf-8"
+            )
+            (ws / "server" / "src" / "index.ts").write_text("export {}\n", encoding="utf-8")
+            found = {p.name for p in collect_ts_sources(ws, ".")}
+            self.assertIn("AuthService.ts", found)
+            self.assertNotIn("index.ts", found)
 
 
 if __name__ == "__main__":

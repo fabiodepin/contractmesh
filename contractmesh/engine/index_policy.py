@@ -89,8 +89,14 @@ def _strip_quotes(value: str) -> str:
     return text
 
 
-def _glob_to_regex(pattern: str) -> re.Pattern[str]:
-    """Convert a gitignore-inspired glob to a regex (full match on relative path)."""
+def _glob_to_regex(pattern: str, *, bare_exact_root_only: bool = False) -> re.Pattern[str]:
+    """Convert a gitignore-inspired glob to a regex (full match on relative path).
+
+    When ``bare_exact_root_only`` is True (IndexPolicy include/exclude), an
+    unslashed exact name such as ``package.json`` matches only the workspace
+    root file. Use ``**/package.json`` for any depth. Unslashed wildcard
+    patterns such as ``*.pem`` still match any path segment.
+    """
     pat = pattern.replace("\\", "/").strip()
     anchored = pat.startswith("/")
     if anchored:
@@ -131,9 +137,15 @@ def _glob_to_regex(pattern: str) -> re.Pattern[str]:
         i += 1
 
     body = "".join(parts)
-    if not anchored and "/" not in pat.replace("**/", "").replace("**", ""):
-        # Basename-style pattern: match any path segment or full relative path.
-        regex = rf"(?:^{body}$|(?:^.*/{body}$))"
+    has_slash = "/" in pat.replace("**/", "").replace("**", "")
+    has_wild = any(c in pat for c in "*?[")
+    if not anchored and not has_slash:
+        if bare_exact_root_only and not has_wild:
+            # Security allowlist: bare exact names are root-relative.
+            regex = rf"^{body}$"
+        else:
+            # Basename-style (gitignore / ignore files, or wildcard excludes).
+            regex = rf"(?:^{body}$|(?:^.*/{body}$))"
     else:
         regex = rf"^{body}$"
     if dir_only:
@@ -142,7 +154,12 @@ def _glob_to_regex(pattern: str) -> re.Pattern[str]:
     return re.compile(regex)
 
 
-def compile_pattern(raw: str, *, repo_names: Iterable[str] | None = None) -> CompiledPattern:
+def compile_pattern(
+    raw: str,
+    *,
+    repo_names: Iterable[str] | None = None,
+    bare_exact_root_only: bool = True,
+) -> CompiledPattern:
     text = _strip_quotes(raw)
     if not text or text.startswith("#"):
         raise ValueError(f"empty index pattern: {raw!r}")
@@ -155,7 +172,12 @@ def compile_pattern(raw: str, *, repo_names: Iterable[str] | None = None) -> Com
         glob = _strip_quotes(match.group(2)).lstrip("/")
         if not glob:
             raise ValueError(f"empty repo-scoped glob: {raw!r}")
-    return CompiledPattern(raw=text, glob=glob, regex=_glob_to_regex(glob), repo=repo)
+    return CompiledPattern(
+        raw=text,
+        glob=glob,
+        regex=_glob_to_regex(glob, bare_exact_root_only=bare_exact_root_only),
+        repo=repo,
+    )
 
 
 def _pattern_matches(
@@ -440,15 +462,32 @@ class IndexPolicy:
                     pass
         return raw.as_posix().strip("/")
 
-    def summary(self) -> dict[str, Any]:
-        return {
+    def summary(self, *, evaluated: bool | None = None) -> dict[str, Any]:
+        """Return a policy snapshot.
+
+        When ``evaluated`` is False (or stats are still zero and unset), expose
+        ``stats`` as ``null`` with a hint so operators do not read zeros as
+        “the workspace has no files.”
+        """
+        stats = self.stats.as_dict()
+        if evaluated is None:
+            evaluated = any(int(stats.get(k, 0) or 0) for k in stats)
+        payload: dict[str, Any] = {
             "mode": self.mode,
             "include": [p.raw for p in self.include],
             "exclude": [p.raw for p in self.exclude],
             "repo_scoped_include": [p.raw for p in self.include if p.repo],
             "repo_scoped_exclude": [p.raw for p in self.exclude if p.repo],
-            "stats": self.stats.as_dict(),
         }
+        if evaluated:
+            payload["stats"] = stats
+        else:
+            payload["stats"] = None
+            payload["stats_note"] = (
+                "not evaluated — counters fill during `contractmesh index` "
+                "(or any walk that calls IndexPolicy.allows/may_enter)"
+            )
+        return payload
 
 
 def normalize_index_security(index: dict[str, Any]) -> dict[str, Any]:
