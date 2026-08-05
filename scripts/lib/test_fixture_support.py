@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from contractmesh.paths import repo_root
+
 ROOT = repo_root()
 LIB = ROOT / "contractmesh" / "engine"
 FIXTURE = ROOT / "tests" / "fixtures" / "basic-workspace"
@@ -16,48 +17,98 @@ MANIFEST = FIXTURE / ".contractmesh" / "index" / "search-index.manifest.json"
 
 
 def ensure_basic_fixture_git(fixture: Path | None = None) -> None:
-    """Local git repo for git-aware tests (not committed to the tool repository)."""
+    """Create deterministic local Git history for Git-aware tests."""
     ws = fixture or FIXTURE
+
     if not shutil_which("git"):
         return
+
     git_dir = ws / ".git"
+
     if not git_dir.is_dir():
-        subprocess.run(["git", "init"], cwd=ws, check=True, capture_output=True)
         subprocess.run(
-            ["git", "config", "user.email", "test@contractmesh.local"],
+            ["git", "init"],
             cwd=ws,
             check=True,
             capture_output=True,
+            text=True,
         )
-        subprocess.run(
-            ["git", "config", "user.name", "ContractMesh Test"],
-            cwd=ws,
-            check=True,
-            capture_output=True,
-        )
-    subprocess.run(["git", "add", "-A"], cwd=ws, check=True, capture_output=True)
+
+    # Do not depend on the developer or CI runner's global Git configuration.
+    subprocess.run(
+        ["git", "config", "user.email", "test@contractmesh.local"],
+        cwd=ws,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "ContractMesh Test"],
+        cwd=ws,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "commit.gpgsign", "false"],
+        cwd=ws,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    subprocess.run(
+        ["git", "add", "-A"],
+        cwd=ws,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
     status = subprocess.run(
         ["git", "status", "--porcelain"],
         cwd=ws,
+        check=True,
         capture_output=True,
         text=True,
-        check=True,
     )
+
     if status.stdout.strip():
-        subprocess.run(["git", "commit", "-m", "fixture snapshot"], cwd=ws, check=True, capture_output=True)
-    count = subprocess.run(
+        subprocess.run(
+            ["git", "commit", "-m", "fixture snapshot"],
+            cwd=ws,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    count_result = subprocess.run(
         ["git", "rev-list", "--count", "HEAD"],
         cwd=ws,
         capture_output=True,
         text=True,
-        check=True,
     )
-    if int(count.stdout.strip() or "0") < 2:
-        marker = ws / ".contractmesh" / "generated" / ".fixture-git-marker"
-        marker.parent.mkdir(parents=True, exist_ok=True)
-        marker.write_text("git history marker for ContractMesh tests\n", encoding="utf-8")
-        subprocess.run(["git", "add", str(marker.relative_to(ws))], cwd=ws, check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "fixture second commit"], cwd=ws, check=True, capture_output=True)
+
+    commit_count = (
+        int(count_result.stdout.strip())
+        if count_result.returncode == 0 and count_result.stdout.strip()
+        else 0
+    )
+
+    if commit_count < 2:
+        subprocess.run(
+            [
+                "git",
+                "commit",
+                "--allow-empty",
+                "-m",
+                "fixture second commit",
+            ],
+            cwd=ws,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
 
 
 def shutil_which(cmd: str) -> str | None:
@@ -69,15 +120,25 @@ def shutil_which(cmd: str) -> str | None:
 def ensure_basic_fixture_index() -> Path:
     if str(LIB) not in sys.path:
         sys.path.insert(0, str(LIB))
+
     ws = FIXTURE.resolve()
     os.environ["CONTRACTMESH_WORKSPACE"] = str(ws)
+
     ensure_basic_fixture_git(ws)
+
     if not MANIFEST.is_file():
         subprocess.run(
-            [sys.executable, "-m", "contractmesh.engine.build_search_index", str(ws), "app=."],
+            [
+                sys.executable,
+                "-m",
+                "contractmesh.engine.build_search_index",
+                str(ws),
+                "app=.",
+            ],
             check=True,
             cwd=ROOT,
         )
+
     return ws
 
 
