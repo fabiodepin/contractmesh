@@ -7,6 +7,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -43,6 +44,124 @@ TRUST_BOOTSTRAP_NOTE = (
     "ContractMesh can suggest knowledge, but only humans can confirm it."
 )
 
+# Always copied from the template (config / ignore policy).
+INIT_CONFIG_RELATIVE = (
+    "contractmesh.yml",
+    ".contractmeshignore",
+)
+
+# Preferred knowledge locations (first existing wins; else create the first default).
+CONTRACTS_PATH_CANDIDATES = (
+    "docs/contracts",
+    "docs/contract",
+    "contracts",
+)
+ADR_PATH_CANDIDATES = (
+    "docs/adr",
+    "docs/adrs",
+    "docs/ADR",
+    "adr",
+    "adrs",
+)
+GAPS_PATH_CANDIDATES = (
+    "docs/known-gaps.md",
+    "docs/known_gaps.md",
+    "known-gaps.md",
+)
+
+EMPTY_KNOWN_GAPS = """# Known gaps
+
+Document confirmed risks and open enforcement gaps here.
+
+| Gap ID | Status | Description |
+| --- | --- | --- |
+"""
+
+# Markers that an existing project should not receive demo code/docs.
+EXISTING_PROJECT_MARKERS = (
+    ".git",
+    "README.md",
+    "README.rst",
+    "README.txt",
+    "package.json",
+    "pyproject.toml",
+    "setup.py",
+    "setup.cfg",
+    "Cargo.toml",
+    "go.mod",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+    "settings.gradle",
+    "settings.gradle.kts",
+    "composer.json",
+    "Gemfile",
+    "mix.exs",
+    "CMakeLists.txt",
+    "Makefile",
+)
+
+INIT_SKIP_SCAN_DIRS = {
+    ".git",
+    ".contractmesh",
+    ".cursor",
+    ".idea",
+    ".vscode",
+    ".ai",
+    ".venv",
+    "venv",
+    "node_modules",
+    "dist",
+    "build",
+    "target",
+    "coverage",
+    "__pycache__",
+    ".next",
+    ".nuxt",
+    ".turbo",
+    "out",
+    "tmp",
+    "temp",
+}
+
+# Top-level / nested dirs worth suggesting for allowlist review (never auto-added).
+INIT_SUGGEST_DIR_NAMES = {
+    "src",
+    "server",
+    "backend",
+    "frontend",
+    "api",
+    "app",
+    "apps",
+    "services",
+    "packages",
+    "lib",
+    "cmd",
+    "internal",
+    "prisma",
+    "scripts",
+    "docker",
+    "web",
+    "client",
+    "mobile",
+    "worker",
+    "workers",
+    "tests",
+    "test",
+    "docs",
+}
+
+INIT_SUGGEST_NESTED = ("src", "resources", "lib", "app", "apps", "tests")
+
+INIT_SUGGEST_FILES = (
+    "package.json",
+    "vite.config.ts",
+    "vite.config.js",
+    "docker-compose.yml",
+    "docker-compose.prod.yml",
+    "prisma/schema.prisma",
+)
+
 
 def resolve_workspace_arg(args: argparse.Namespace) -> Path:
     if getattr(args, "workspace", None):
@@ -52,26 +171,273 @@ def resolve_workspace_arg(args: argparse.Namespace) -> Path:
     return require_workspace()
 
 
-def copy_template(template: str, destination: Path, *, force: bool = False) -> None:
+def is_existing_project(destination: Path) -> bool:
+    """True when the target already looks like a real project (brownfield)."""
+    if not destination.is_dir():
+        return False
+    for name in EXISTING_PROJECT_MARKERS:
+        if (destination / name).exists():
+            return True
+    skip_names = {".DS_Store", ".idea", ".vscode", ".contractmesh"}
+    for child in destination.iterdir():
+        if child.name in skip_names or child.name.startswith(".git"):
+            continue
+        if child.is_file():
+            return True
+        if child.is_dir() and any(child.iterdir()):
+            return True
+    return False
+
+
+def inferred_workspace_name(destination: Path) -> str:
+    name = destination.name.strip()
+    return name or "workspace"
+
+
+def _first_existing_dir(destination: Path, candidates: tuple[str, ...]) -> str | None:
+    for rel in candidates:
+        if (destination / rel).is_dir():
+            return rel
+    return None
+
+
+def _first_existing_file(destination: Path, candidates: tuple[str, ...]) -> str | None:
+    for rel in candidates:
+        if (destination / rel).is_file():
+            return rel
+    return None
+
+
+def resolve_knowledge_paths(destination: Path) -> dict[str, str]:
+    """Pick existing brownfield knowledge paths when present; else template defaults."""
+    contracts = _first_existing_dir(destination, CONTRACTS_PATH_CANDIDATES) or "docs/contracts"
+    adrs = _first_existing_dir(destination, ADR_PATH_CANDIDATES) or "docs/adrs"
+    gaps = _first_existing_file(destination, GAPS_PATH_CANDIDATES) or "docs/known-gaps.md"
+    return {"contracts": contracts, "adrs": adrs, "gaps": gaps}
+
+
+def copy_template_files(
+    template: str,
+    destination: Path,
+    *,
+    force: bool = False,
+    relative_paths: list[str] | None = None,
+) -> set[str]:
+    """Copy selected template files, or the full tree when relative_paths is None.
+
+    Returns the set of relative paths written (not skipped).
+    """
     src = templates_dir() / template
     if not src.is_dir():
         raise SystemExit(f"unknown template: {template}")
-    for item in src.rglob("*"):
+
+    if relative_paths is not None:
+        items: list[Path] = []
+        for rel in relative_paths:
+            item = src / rel
+            if item.is_file():
+                items.append(item)
+        file_iter = items
+    else:
+        file_iter = [
+            item
+            for item in src.rglob("*")
+            if item.is_file()
+            and not any(part in {"__pycache__", ".git"} for part in item.relative_to(src).parts)
+            and item.suffix not in {".pyc", ".pyo"}
+        ]
+
+    written: set[str] = set()
+    for item in file_iter:
         rel = item.relative_to(src)
-        if any(part in {"__pycache__", ".git"} for part in rel.parts):
-            continue
-        if item.is_file() and item.suffix in {".pyc", ".pyo"}:
-            continue
         target = destination / rel
-        if item.is_dir():
-            target.mkdir(parents=True, exist_ok=True)
-            continue
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists() and not force:
             print(f"[skip] {target} already exists")
             continue
         shutil.copy2(item, target)
         print(f"[ok] wrote {target}")
+        written.add(rel.as_posix())
+    return written
+
+
+def write_empty_knowledge_scaffold(
+    destination: Path,
+    *,
+    force: bool = False,
+    paths: dict[str, str] | None = None,
+) -> dict[str, str]:
+    resolved = paths or resolve_knowledge_paths(destination)
+    for key in ("contracts", "adrs"):
+        rel = resolved[key]
+        path = destination / rel
+        if path.is_dir():
+            print(f"[ok] using existing {rel}/")
+            continue
+        path.mkdir(parents=True, exist_ok=True)
+        keep = path / ".gitkeep"
+        if not keep.is_file():
+            keep.write_text("", encoding="utf-8")
+            print(f"[ok] wrote {keep}")
+
+    gaps_rel = resolved["gaps"]
+    gaps = destination / gaps_rel
+    if gaps.exists() and not force:
+        print(f"[skip] {gaps} already exists")
+        return resolved
+    gaps.parent.mkdir(parents=True, exist_ok=True)
+    gaps.write_text(EMPTY_KNOWN_GAPS, encoding="utf-8")
+    print(f"[ok] wrote {gaps}")
+    return resolved
+
+
+def yaml_scalar(value: str) -> str:
+    """Quote a YAML scalar when the bare form would be ambiguous or invalid."""
+    text = str(value)
+    if not text:
+        return '""'
+    needs_quotes = (
+        text != text.strip()
+        or text.lower() in {"true", "false", "null", "yes", "no", "on", "off"}
+        or text[:1].isdigit()
+        or any(ch in text for ch in ":#{}[],&*!|>%@`'\"\\")
+        or "\n" in text
+        or text.startswith(("-", "?", "*", "&", "!", "%", "@", "`"))
+    )
+    if not needs_quotes:
+        return text
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def customize_init_manifest(
+    destination: Path,
+    *,
+    knowledge: dict[str, str],
+    workspace_name: str,
+) -> None:
+    """Rewrite placeholder identity and docs paths in a freshly written manifest."""
+    path = destination / "contractmesh.yml"
+    if not path.is_file():
+        return
+    text = path.read_text(encoding="utf-8")
+    original = text
+    quoted_name = yaml_scalar(workspace_name)
+
+    # Workspace display name (template defaults).
+    text = re.sub(
+        r"(?m)^name:\s*(?:example-app|monorepo-workspace)\s*$",
+        f"name: {quoted_name}",
+        text,
+        count=1,
+    )
+    # Prefer directory name for the primary repo label when still "app".
+    text = re.sub(
+        r"(?m)^(\s+name:\s+)app\s*$",
+        rf"\g<1>{quoted_name}",
+        text,
+        count=1,
+    )
+
+    def _replace_docs_list_item(section: str, new_path: str, content: str) -> str:
+        # Matches:
+        #   adrs:
+        #     - docs/adrs
+        pattern = rf"(?m)^(\s*{re.escape(section)}:\s*\n\s*-\s+)[^\n]+"
+        return re.sub(pattern, rf"\g<1>{new_path}", content, count=1)
+
+    text = _replace_docs_list_item("contracts", knowledge["contracts"], text)
+    text = _replace_docs_list_item("adrs", knowledge["adrs"], text)
+    text = _replace_docs_list_item("gaps", knowledge["gaps"], text)
+
+    if text != original:
+        path.write_text(text, encoding="utf-8")
+        print(f"[ok] customized {path} (name={workspace_name}, docs paths)")
+
+
+def _normalize_include_root(pattern: str) -> str:
+    value = pattern.strip().lstrip("./")
+    if value.endswith("/**"):
+        return value[:-3]
+    if value.endswith("/*"):
+        return value[:-2]
+    return value.rstrip("/")
+
+
+def include_covers_candidate(include_patterns: list[str], candidate: str) -> bool:
+    """Return True when an include rule already covers the candidate path.
+
+    Coverage is one-way: a broader include covers a narrower candidate
+    (``docs/**`` covers ``docs/contracts/**``), but not the reverse.
+    """
+    cand = candidate.strip().lstrip("./")
+    cand_root = _normalize_include_root(cand)
+    for pattern in include_patterns:
+        raw = str(pattern).strip().lstrip("./")
+        root = _normalize_include_root(raw)
+        if not root and not raw:
+            continue
+        if cand == raw or cand_root == root:
+            return True
+        # Include root is a prefix of the candidate → candidate already covered.
+        if cand_root.startswith(root + "/"):
+            return True
+        # File candidate under a directory include.
+        if not cand.endswith("/**") and (cand == root or cand.startswith(root + "/")):
+            return True
+    return False
+
+
+def detect_candidate_includes(destination: Path) -> list[str]:
+    """Heuristic paths present in the tree that operators may want to allowlist."""
+    found: list[str] = []
+    seen: set[str] = set()
+
+    def add(rel: str) -> None:
+        if rel not in seen:
+            seen.add(rel)
+            found.append(rel)
+
+    if not destination.is_dir():
+        return found
+
+    for child in sorted(destination.iterdir(), key=lambda p: p.name.lower()):
+        name = child.name
+        if name in INIT_SKIP_SCAN_DIRS or name.startswith("."):
+            continue
+        if child.is_dir():
+            if name in INIT_SUGGEST_DIR_NAMES or name.endswith("-api") or name.endswith("-web"):
+                add(f"{name}/**")
+            if name in {"server", "backend", "frontend", "api", "web", "client", "app", "apps"}:
+                for nested in INIT_SUGGEST_NESTED:
+                    if (child / nested).is_dir():
+                        add(f"{name}/{nested}/**")
+        elif child.is_file() and name in INIT_SUGGEST_FILES:
+            add(name)
+
+    for rel in INIT_SUGGEST_FILES:
+        if "/" in rel and (destination / rel).exists():
+            add(rel)
+
+    return found
+
+
+def print_allowlist_suggestions(destination: Path) -> None:
+    """Surface roots outside the starter allowlist without authorizing them."""
+    try:
+        manifest = load_workspace_manifest(destination)
+    except Exception:
+        return
+    include = [str(x) for x in ((manifest.get("index") or {}).get("include") or [])]
+    candidates = detect_candidate_includes(destination)
+    outside = [c for c in candidates if not include_covers_candidate(include, c)]
+    if not outside:
+        return
+    print("[hint] Paths detected but not in index.include (not auto-added — review before indexing):")
+    for rel in outside:
+        print(f"  - {rel}")
+    print("Add selected paths to contractmesh.yml → index.include, then re-run contractmesh index.")
+    print("Check a path with: contractmesh index --explain PATH")
 
 
 def append_gitignore(workspace: Path) -> None:
@@ -96,6 +462,107 @@ def scaffold_contractmesh_dirs(workspace: Path) -> None:
             keep.write_text("", encoding="utf-8")
 
 
+def adapt_monorepo_manifest_without_examples(
+    destination: Path, *, workspace_name: str
+) -> None:
+    """Replace placeholder multi-repo paths with a valid single-root starter.
+
+    Config-only monorepo init must not leave services/* / apps/* entries that
+    do not exist on disk (check/index would fail closed).
+    """
+    path = destination / "contractmesh.yml"
+    if not path.is_file():
+        return
+    quoted = yaml_scalar(workspace_name)
+    path.write_text(
+        f"""name: {quoted}
+mode: monorepo
+workspace_mapping_version: v3
+repos:
+  - path: .
+    name: {quoted}
+docs:
+  contracts:
+    - docs/contracts
+  adrs:
+    - docs/adrs
+  gaps:
+    - docs/known-gaps.md
+lint:
+  require_owner: true
+  require_ids: true
+  require_valid_crosslinks: true
+index:
+  mode: allowlist
+  include:
+    - docs/**
+    - README.md
+  # Config-only monorepo init starts with a single workspace root.
+  # Add real repos and include rules after creating those directories, for example:
+  #   repos:
+  #     - path: services/billing-api
+  #       name: billing-api
+  #   index.include:
+  #     - billing-api:src/**
+  #     - billing-api:tests/**
+  # Denylist is available only when deliberately configured.
+#
+# Debug: contractmesh index --explain PATH
+#        contractmesh index --show-policy
+""",
+        encoding="utf-8",
+    )
+    print(
+        f"[ok] adapted {path} to a single-root monorepo starter "
+        "(add real service paths before indexing them)."
+    )
+
+
+def align_example_docs_with_knowledge(destination: Path, knowledge: dict[str, str]) -> None:
+    """Move template demo docs onto resolved brownfield knowledge paths when they differ."""
+    pairs = (
+        ("docs/contracts/example-contract.md", f"{knowledge['contracts']}/example-contract.md"),
+        ("docs/adrs/example-adr.md", f"{knowledge['adrs']}/example-adr.md"),
+        ("docs/known-gaps.md", knowledge["gaps"]),
+    )
+    for src_rel, dst_rel in pairs:
+        src = destination / src_rel
+        dst = destination / dst_rel
+        if not src.is_file():
+            continue
+        try:
+            if src.resolve() == dst.resolve():
+                continue
+        except OSError:
+            pass
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if dst.exists():
+            src.unlink()
+            print(f"[ok] removed template duplicate {src}")
+            continue
+        shutil.move(str(src), str(dst))
+        print(f"[ok] placed example at {dst}")
+
+    for maybe_empty in ("docs/adrs", "docs/contracts"):
+        path = destination / maybe_empty
+        if not path.is_dir():
+            continue
+        try:
+            remaining = [p for p in path.iterdir() if p.name != ".gitkeep"]
+        except OSError:
+            continue
+        if remaining:
+            continue
+        keep = path / ".gitkeep"
+        if keep.is_file():
+            keep.unlink()
+        try:
+            path.rmdir()
+            print(f"[ok] removed unused template dir {path}")
+        except OSError:
+            pass
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     if args.here or not args.path:
         destination = Path.cwd().resolve()
@@ -103,7 +570,53 @@ def cmd_init(args: argparse.Namespace) -> int:
         destination = Path(args.path).resolve()
         if not destination.exists():
             destination.mkdir(parents=True)
-    copy_template(args.template, destination, force=args.force)
+
+    with_examples = bool(getattr(args, "with_examples", False))
+    existing = is_existing_project(destination)
+    workspace_name = inferred_workspace_name(destination)
+    knowledge = resolve_knowledge_paths(destination)
+
+    # Brownfield never gets demo code/docs unless the user opts in explicitly.
+    # Greenfield defaults are also non-invasive (facts first); examples need --with-examples.
+    wrote: set[str] = set()
+    if with_examples:
+        if existing:
+            print(
+                "[warn] existing project detected; writing template examples because "
+                "--with-examples was set."
+            )
+        wrote = copy_template_files(args.template, destination, force=args.force)
+        align_example_docs_with_knowledge(destination, knowledge)
+    else:
+        if existing:
+            print(
+                "[ok] existing project detected — initializing without example code, "
+                "tests, or demo contracts (facts first)."
+            )
+            print("Hint: pass --with-examples only when you intentionally want the scaffold demo.")
+        wrote = copy_template_files(
+            args.template,
+            destination,
+            force=args.force,
+            relative_paths=list(INIT_CONFIG_RELATIVE),
+        )
+        if args.template == "monorepo" and "contractmesh.yml" in wrote:
+            adapt_monorepo_manifest_without_examples(
+                destination, workspace_name=workspace_name
+            )
+            print(
+                "[hint] monorepo without --with-examples uses a single workspace root; "
+                "add real services to contractmesh.yml after they exist on disk."
+            )
+        knowledge = write_empty_knowledge_scaffold(
+            destination, force=args.force, paths=knowledge
+        )
+
+    if "contractmesh.yml" in wrote:
+        customize_init_manifest(
+            destination, knowledge=knowledge, workspace_name=workspace_name
+        )
+
     scaffold_contractmesh_dirs(destination)
     append_gitignore(destination)
     print("[ok] workspace initialized with an explicit allowlist.")
@@ -111,6 +624,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     print("Only the configured paths will be analyzed or exposed through MCP.")
     print("The starter include list is intentional — paths outside it are omitted")
     print("until you add them to index.include.")
+    print_allowlist_suggestions(destination)
     print("Next: edit contractmesh.yml, then run: contractmesh index && contractmesh status")
     print("Hint: contractmesh index --show-policy")
     return 0
@@ -120,16 +634,15 @@ def cmd_index(args: argparse.Namespace) -> int:
     workspace = resolve_workspace_arg(args)
     explain_path = getattr(args, "explain", None)
     if explain_path:
-        from contractmesh.engine.index_policy import load_index_policy
+        from contractmesh.engine.index_explain import explain_index_path
 
         try:
-            policy = load_index_policy(workspace)
+            payload = explain_index_path(workspace, explain_path)
         except ValueError as exc:
             print(f"[FAIL] {exc}", file=sys.stderr)
             return 1
-        decision = policy.explain(explain_path)
-        print(json.dumps(decision.as_dict(), indent=2, ensure_ascii=False))
-        return 0 if decision.allowed else 2
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0 if payload.get("allowed") else 2
 
     if getattr(args, "show_policy", False):
         from contractmesh.engine.index_policy import load_index_policy
@@ -139,7 +652,7 @@ def cmd_index(args: argparse.Namespace) -> int:
         except ValueError as exc:
             print(f"[FAIL] {exc}", file=sys.stderr)
             return 1
-        print(json.dumps(policy.summary(), indent=2, ensure_ascii=False))
+        print(json.dumps(policy.summary(evaluated=False), indent=2, ensure_ascii=False))
         return 0
 
     # Fail closed before walking the tree when allowlist is misconfigured.
@@ -188,11 +701,30 @@ def cmd_status(args: argparse.Namespace) -> int:
         )
     else:
         print("Index:      missing (run: contractmesh index)")
-    contracts = workspace / "docs" / "contracts"
-    adrs = workspace / "docs" / "adrs"
-    c_count = len(list(contracts.glob("**/*.md"))) if contracts.is_dir() else 0
-    a_count = len(list(adrs.glob("**/*.md"))) if adrs.is_dir() else 0
-    print(f"Docs:       docs/contracts/ ({c_count} files), docs/adrs/ ({a_count} files)")
+    try:
+        manifest = load_workspace_manifest(workspace)
+        docs_cfg = manifest.get("docs") or {}
+        contract_roots = [str(p) for p in (docs_cfg.get("contracts") or ["docs/contracts"])]
+        adr_roots = [str(p) for p in (docs_cfg.get("adrs") or ["docs/adrs"])]
+    except Exception:
+        contract_roots = ["docs/contracts"]
+        adr_roots = ["docs/adrs"]
+
+    def _md_count(roots: list[str]) -> tuple[str, int]:
+        total = 0
+        labels: list[str] = []
+        for rel in roots:
+            path = workspace / rel
+            labels.append(f"{rel}/")
+            if path.is_dir():
+                total += len(list(path.glob("**/*.md")))
+            elif path.is_file() and path.suffix == ".md":
+                total += 1
+        return ", ".join(labels), total
+
+    c_label, c_count = _md_count(contract_roots)
+    a_label, a_count = _md_count(adr_roots)
+    print(f"Docs:       {c_label} ({c_count} files), {a_label} ({a_count} files)")
     code = list(workspace.glob("src/**/*.py")) + list(workspace.glob("src/**/*.java"))
     tests = list(workspace.glob("tests/**/*.py")) + list(workspace.glob("tests/**/*.java"))
     if code:
@@ -455,12 +987,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_init = sub.add_parser(
         "init",
-        help="scaffold contractmesh.yml and starter docs in a project",
-        description="Initialize a ContractMesh workspace from a template.",
+        help="scaffold contractmesh.yml in a project (non-invasive by default)",
+        description=(
+            "Initialize a ContractMesh workspace. By default only writes config, "
+            "ignore files, empty knowledge directories, and .gitignore updates — "
+            "no example code, tests, or demo contracts. Pass --with-examples for "
+            "the full scaffold demo."
+        ),
     )
     p_init.add_argument("--here", action="store_true", help="Initialize in the current directory")
     p_init.add_argument("--force", action="store_true", help="Overwrite existing scaffold files")
     p_init.add_argument("--template", choices=["basic", "monorepo"], default="basic")
+    p_init.add_argument(
+        "--with-examples",
+        action="store_true",
+        help=(
+            "Copy template example code, tests, and demo contracts/ADRs. "
+            "Required for demo content; never the default in existing projects."
+        ),
+    )
     p_init.add_argument("path", nargs="?", help="Target directory (created if missing)")
     p_init.set_defaults(func=cmd_init)
 

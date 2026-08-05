@@ -23,7 +23,7 @@ Use this checklist before tagging a ContractMesh release.
   - `pipx install "$(ls dist/contractmesh-*-py3-none-any.whl)"`
   - `pipx inject contractmesh "mcp>=1.2.0,<2"` (if the `[mcp]` extra on the local wheel is unavailable)
   - `~/.local/bin/contractmesh self check`
-  - `contractmesh check` in a temp project (`init --here`, `index`, `check`)
+  - `contractmesh check` in a temp project (`init --here --with-examples`, `index`, `check`)
 - Run individual checks when debugging failures:
   - `python3 -m unittest scripts.lib.test_fetch_hits`
   - `python3 -m unittest scripts.lib.test_preflight_change`

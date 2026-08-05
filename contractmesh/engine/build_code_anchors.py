@@ -529,27 +529,76 @@ def collect_java_tests(
 
 
 def collect_ts_sources(workspace: Path, repo_path: str) -> list[Path]:
-    base = workspace / repo_path / "src"
+    """Collect curated TypeScript sources under ``src`` and nested ``*/src``.
+
+    Layouts such as ``server/src`` or ``frontend/src`` are included when the
+    repo root is ``.``. Only files matching ``TS_GLOBS`` become anchors.
+    """
+    base = workspace / repo_path
     if not base.is_dir():
         return []
+    src_roots: list[Path] = []
+    direct = base / "src"
+    if direct.is_dir():
+        src_roots.append(direct)
+    skip = {
+        "node_modules",
+        "dist",
+        "build",
+        "coverage",
+        ".git",
+        ".contractmesh",
+        "venv",
+        ".venv",
+        "target",
+        "tests",
+        "test",
+        "__tests__",
+        "vendor",
+        "third_party",
+        "third-party",
+        "fixtures",
+        "examples",
+        "example",
+        "tmp",
+        "temp",
+        "out",
+    }
+    try:
+        children = list(base.iterdir())
+    except OSError:
+        children = []
+    for child in children:
+        if not child.is_dir() or child.name in skip or child.name.startswith("."):
+            continue
+        nested = child / "src"
+        if nested.is_dir():
+            src_roots.append(nested)
+
     found: set[Path] = set()
-    for pattern in TS_GLOBS:
-        for p in base.glob(pattern):
-            if p.is_file() and "node_modules" not in p.parts:
-                found.add(p)
+    for src_root in src_roots:
+        for pattern in TS_GLOBS:
+            for p in src_root.glob(pattern):
+                if p.is_file() and "node_modules" not in p.parts:
+                    found.add(p)
     return sorted(found)
 
 
 def collect_ts_tests(workspace: Path, repo_path: str) -> list[Path]:
     base = workspace / repo_path
     found: set[Path] = set()
-    for pattern in (
+    if not base.is_dir():
+        return []
+    patterns = (
         "src/**/*.test.ts",
         "src/**/*.spec.ts",
+        "*/src/**/*.test.ts",
+        "*/src/**/*.spec.ts",
         "test/**/*.ts",
         "tests/**/*.ts",
         "__tests__/**/*.ts",
-    ):
+    )
+    for pattern in patterns:
         for p in base.glob(pattern):
             if p.is_file() and "node_modules" not in p.parts:
                 found.add(p)

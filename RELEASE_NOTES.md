@@ -1,5 +1,32 @@
 # ContractMesh Release Notes
 
+## v0.1.8
+
+- **Brownfield-safe `init`** — default `contractmesh init` no longer writes
+  example code, tests, or demo contracts/ADRs into an existing project.
+  It creates `contractmesh.yml`, `.contractmeshignore`, empty knowledge
+  directories, a blank `docs/known-gaps.md` (no fake gap IDs), and `.gitignore`
+  updates only.
+- **`--with-examples`** — explicit opt-in for the full scaffold demo
+  (`src/example.py`, `tests/test_example.py`, example contract/ADR). Use for
+  smoke tests and empty demo workspaces, not for real repositories.
+- **Brownfield awareness** — init infers `name` from the directory, reuses
+  existing ADR/contract paths when present (e.g. `docs/adr` instead of creating
+  `docs/adrs`), and prints candidate allowlist roots (`server/**`, `prisma/**`,
+  …) without auto-adding them.
+- **Root-relative bare includes** — `package.json` / `vite.config.ts` in
+  `index.include` match the workspace root only; use `**/package.json` for any
+  depth. Wildcard basenames such as `*.pem` still match anywhere.
+- **Allowlist ≠ indexed artifact** — `index --explain` now reports `indexed_as`
+  / `why_not_indexed` so operators see when a path is readable but not collected
+  as a doc or code anchor (config, SQL, non-curated `.ts`, …).
+- **Nested `*/src` TypeScript discovery** — curated TS anchors also look under
+  `server/src`, `frontend/src`, etc., not only `./src`.
+- **Manifest `docs:` paths** — ADR/contract collection and kind inference follow
+  configured roots (including `docs/adr`).
+- **`--show-policy` honesty** — before an index walk, `stats` is `null` with a
+  note instead of ambiguous zeros.
+
 ## v0.1.6
 
 - **Allowlist-first index security** — `index.mode` is required (`allowlist` or

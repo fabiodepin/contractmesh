@@ -441,15 +441,15 @@ def index_status(deep: bool = False) -> str:
 
 @mcp.tool()
 def explain_index_path(path: str) -> str:
-    """Explain whether a workspace-relative path would be indexed and why.
+    """Explain policy access and whether a path becomes an index artifact.
 
-    Uses the active index security policy: allowlist/denylist include/exclude,
-    then .contractmeshignore + engine defaults. Does not rebuild the index.
+    Uses the active index security policy plus collector rules. Allowlisted does
+    not always mean indexed — only curated docs/anchors enter the search index.
+    Does not rebuild the index.
     """
-    from contractmesh.engine.index_policy import load_index_policy
+    from contractmesh.engine.index_explain import explain_index_path as explain
 
-    policy = load_index_policy(_workspace())
-    return json.dumps(policy.explain(path).as_dict(), ensure_ascii=False, indent=2)
+    return json.dumps(explain(_workspace(), path), ensure_ascii=False, indent=2)
 
 
 def _run_pr_impact(
