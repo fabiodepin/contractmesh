@@ -3,11 +3,11 @@ name: publish
 # Publishes to PyPI on a GitHub Release. Users then install with:
 #   pipx install "contractmesh[mcp]"
 #
-# One-time setup (after the GitHub repo exists):
+# One-time setup:
 #   1. PyPI → Account settings → Publishing → Add a new pending publisher
 #   2. Owner: fabiodepin  Project: contractmesh
-#      Workflow: publish.yml  Environment: pypi (optional but recommended)
-#   3. Create a GitHub Environment named "pypi" (optional protection rules)
+#      Workflow: publish.yml  Environment: pypi
+#   3. Create a GitHub Environment named "pypi"
 #   4. Create a Release tagged vX.Y.Z matching VERSION / pyproject.toml
 
 on:
@@ -56,6 +56,7 @@ jobs:
           path: dist/
 
   publish:
+    if: github.event_name == 'release'
     needs: build
     runs-on: ubuntu-latest
     environment:
