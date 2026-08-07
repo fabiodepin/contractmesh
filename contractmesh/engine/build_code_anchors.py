@@ -30,6 +30,7 @@ ANCHOR_TYPE_PRIORITY = {
     "controller": 0,
     "service_impl": 1,
     "service": 2,
+    "repository": 3,
     "client": 3,
     "filter": 4,
     "multitenancy": 5,
@@ -40,14 +41,17 @@ ANCHOR_TYPE_PRIORITY = {
     "ts_service": 9,
     "ts_page": 9,
     "ts_store": 9,
-    "ts_type": 9,
+    "ts_router": 9,
+    # Prefer Vue SFCs over ambient TS types when a view repo hits the cap.
     "vue_component": 10,
     "go_type": 10,
     "go_func": 11,
     "python_type": 11,
+    "specification": 11,
     "support": 12,
     "entity": 12,
     "java_type": 13,
+    "ts_type": 14,
     "test": 40,
 }
 
@@ -67,7 +71,11 @@ TS_EXPORT_CLASS_RE = re.compile(
     re.MULTILINE,
 )
 TS_EXPORT_CONST_RE = re.compile(
-    r"export\s+(?:const|function)\s+(\w+)",
+    r"export\s+(?:async\s+)?(?:const|function)\s+(\w+)",
+    re.MULTILINE,
+)
+TS_EXPORT_TYPE_RE = re.compile(
+    r"export\s+(?:type|interface)\s+(\w+)",
     re.MULTILINE,
 )
 GO_TYPE_RE = re.compile(r"^type\s+(\w+)\s+struct", re.MULTILINE)
@@ -79,10 +87,19 @@ JAVA_PATH_HINTS = (
     "/controllers/",
     "/controller/",
     "controller.java",
+    "controllerimpl.java",
     "/services/",
     "/service/",
     "service.java",
     "serviceimpl.java",
+    "/repository/",
+    "/repositories/",
+    "/jooq/",
+    "repository.java",
+    "/specification/",
+    "/mapper/",
+    "mapper.java",
+    "mapperimpl.java",
     "/config/",
     "config.java",
     "configuration.java",
@@ -116,6 +133,20 @@ TS_GLOBS = (
     "**/requestNoAuth.ts",
     "**/requestSystemPortal.ts",
     "**/baseService.ts",
+    "**/system/types/**/*.ts",
+    "**/global/types/**/*.ts",
+    # Common Node/Express (and similar) backend entrypoints — kebab + PascalCase.
+    "**/*Router.ts",
+    "**/*-router.ts",
+    "**/*Repository.ts",
+    "**/*-repository.ts",
+    "**/*Middleware.ts",
+    "**/*-middleware.ts",
+    "**/*Factory.ts",
+    "**/*-factory.ts",
+    "**/config.ts",
+    # One-level module barrels: src/<module>/index.ts (not nested **/index.ts).
+    "*/index.ts",
 )
 
 
@@ -185,10 +216,21 @@ def infer_java_anchor_type(rel_path: str, class_name: str) -> str:
         return "service_impl"
     if class_name.endswith("Service"):
         return "service"
+    if (
+        class_name.endswith("Repository")
+        or "/repository/" in norm
+        or "/repositories/" in norm
+        or "/jooq/" in norm
+    ):
+        return "repository"
     if class_name.endswith("Client"):
         return "client"
     if class_name.endswith(("Filter", "Guard")) or "/security/" in norm:
         return "filter"
+    if class_name.endswith("Mapper") or "/mapper/" in norm:
+        return "mapper"
+    if "specification" in class_name.lower() or "/specification/" in norm:
+        return "specification"
     if class_name.endswith(("Resolver", "Helper", "Limiter")):
         return "support"
     if class_name.endswith("Context") or "/multitenancy/" in norm:
@@ -420,6 +462,50 @@ def index_yaml_file(
     return out
 
 
+def _typescript_stem_fallback(stem: str) -> list[str]:
+    if stem.endswith(("Service", "Page", "Store")) or stem.startswith("request"):
+        return [stem]
+    if stem in {"api-client", "api-services", "http", "client", "config"}:
+        return [stem.replace("-", "_")]
+    for suffix in (
+        "-router",
+        "-repository",
+        "-middleware",
+        "-factory",
+        "Router",
+        "Repository",
+        "Middleware",
+        "Factory",
+    ):
+        if stem.endswith(suffix):
+            return [stem.replace("-", "_")]
+    if stem == "index":
+        return ["index"]
+    return []
+
+
+def _infer_ts_anchor_type(
+    rel_path: str, symbol: str, *, is_type_file: bool, type_symbols: set[str]
+) -> str:
+    if is_type_file or symbol in type_symbols:
+        return "ts_type"
+    if symbol.endswith("Page"):
+        return "ts_page"
+    if symbol.endswith("Store"):
+        return "ts_store"
+    norm = rel_path.replace("\\", "/").lower()
+    stem = Path(rel_path).stem.lower()
+    if (
+        "router" in symbol.lower()
+        or stem.endswith("router")
+        or stem.endswith("-router")
+        or "/routes/" in norm
+        or "/routers/" in norm
+    ):
+        return "ts_router"
+    return "ts_service"
+
+
 def index_typescript_file(
     workspace: Path,
     abs_path: Path,
@@ -430,23 +516,23 @@ def index_typescript_file(
     weight: int,
 ) -> list[tuple[dict, dict, int]]:
     text = abs_path.read_text(encoding="utf-8", errors="replace")
+    type_symbols = {m.group(1) for m in TS_EXPORT_TYPE_RE.finditer(text)}
     symbols: list[str] = []
-    for pat in (TS_EXPORT_CLASS_RE, TS_EXPORT_CONST_RE):
+    for pat in (TS_EXPORT_CLASS_RE, TS_EXPORT_CONST_RE, TS_EXPORT_TYPE_RE):
         symbols.extend(m.group(1) for m in pat.finditer(text))
     if not symbols:
-        stem = abs_path.stem
-        if stem.endswith(("Service", "Page", "Store")) or stem.startswith("request"):
-            symbols = [stem]
-        elif stem in {"api-client", "api-services", "http", "client"}:
-            symbols = [stem.replace("-", "_")]
+        symbols = _typescript_stem_fallback(abs_path.stem)
     if not symbols:
         return []
 
+    is_type_file = "/types/" in rel_path.replace("\\", "/")
     line_no = 1
     excerpt = text[:ANCHOR_MAX_BYTES]
     out: list[tuple[dict, dict, int]] = []
     for sym in sorted(set(symbols)):
-        atype = "ts_page" if sym.endswith("Page") else "ts_store" if sym.endswith("Store") else "ts_service"
+        atype = _infer_ts_anchor_type(
+            rel_path, sym, is_type_file=is_type_file, type_symbols=type_symbols
+        )
         out.append(
             write_anchor(
                 workspace,
@@ -614,8 +700,12 @@ def collect_ts_sources(workspace: Path, repo_path: str) -> list[Path]:
     for src_root in src_roots:
         for pattern in TS_GLOBS:
             for p in src_root.glob(pattern):
-                if p.is_file() and "node_modules" not in p.parts:
-                    found.add(p)
+                if not p.is_file() or "node_modules" in p.parts:
+                    continue
+                name = p.name
+                if name.endswith((".test.ts", ".spec.ts", ".test.tsx", ".spec.tsx")):
+                    continue
+                found.add(p)
     return sorted(found)
 
 
@@ -869,6 +959,54 @@ def resolve_cap_per_repo(raw: object | None) -> int:
     return max(1, value)
 
 
+def normalize_cap_by_repo(raw: object | None) -> dict[str, int]:
+    """Parse index.code_anchor_cap_by_repo.
+
+    Supported forms (community-friendly):
+    - mapping: ``{ "billing-api": 1200 }``
+    - list of ``repo=N`` strings (works with the contractmesh.yml subset parser)::
+
+        code_anchor_cap_by_repo:
+          - billing-api=1200
+    """
+    out: dict[str, int] = {}
+    if raw is None or raw is False or raw == "":
+        return out
+    if isinstance(raw, dict):
+        items = raw.items()
+    elif isinstance(raw, list):
+        items = []
+        for item in raw:
+            text = str(item).strip().strip("\"'")
+            if "=" not in text:
+                continue
+            name, value = text.split("=", 1)
+            items.append((name.strip(), value.strip()))
+    else:
+        return out
+    for name, value in items:
+        key = str(name).strip()
+        if not key:
+            continue
+        try:
+            out[key] = max(1, int(str(value).strip()))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def resolve_repo_cap(
+    repo: str,
+    *,
+    default_cap: int,
+    cap_by_repo: dict[str, int] | None = None,
+) -> int:
+    """Return the per-repo anchor cap, preferring explicit overrides."""
+    if cap_by_repo and repo in cap_by_repo:
+        return max(1, int(cap_by_repo[repo]))
+    return max(1, int(default_cap))
+
+
 def anchor_sort_key(entry: tuple[dict, dict, int]) -> tuple[int, int, str]:
     """Prefer high-signal anchor types, then higher doc weight, then path."""
     manifest = entry[0]
@@ -888,17 +1026,19 @@ def collect_code_anchors(
     weight: int = 58,
     policy: IndexPolicy | None = None,
     cap_per_repo: int | None = None,
+    cap_by_repo: dict[str, int] | object | None = None,
 ) -> tuple[list[tuple[dict, dict, int]], dict[str, int], dict[str, dict[str, int]]]:
     """Return (entries, per_repo_counts, truncation_by_repo)."""
     all_entries: list[tuple[dict, dict, int]] = []
     per_repo: dict[str, int] = {}
     truncation_by_repo: dict[str, dict[str, int]] = {}
     policy = policy or load_index_policy(workspace)
-    cap = (
+    default_cap = (
         DEFAULT_CAP_PER_REPO
         if cap_per_repo is None
         else resolve_cap_per_repo(cap_per_repo)
     )
+    overrides = normalize_cap_by_repo(cap_by_repo)
 
     def visible(paths: list[Path]) -> list[Path]:
         return [p for p in paths if not policy.ignores(p)]
@@ -909,6 +1049,7 @@ def collect_code_anchors(
         repo_path = spec.rel_path
         if not (workspace / repo_path).is_dir():
             continue
+        cap = resolve_repo_cap(repo, default_cap=default_cap, cap_by_repo=overrides)
         repo_entries: list[tuple[dict, dict, int]] = []
 
         for abs_path in visible(collect_java_sources(workspace, repo_path, policy)):

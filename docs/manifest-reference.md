@@ -109,6 +109,9 @@ index:
   # Max code/test anchors kept per repo (default 500). Excess is dropped after
   # sorting by anchor_type priority (controllers/services first), then weight.
   code_anchor_cap_per_repo: 500
+  # Optional overrides for large repos (list form works with the YAML subset parser).
+  code_anchor_cap_by_repo:
+    - billing-api=1200
 ```
 
 Boolean feature flags default to `false`. **`index.mode` is required** and has no
@@ -118,9 +121,21 @@ silent fallback.
 when curated collectors still exceed the cap. Truncation prefers high-signal
 `anchor_type` values and higher document `weight`, not discovery order.
 
+`code_anchor_cap_by_repo` overrides the default for named repos. Prefer this over raising
+the global cap when only one or two repositories are outliers. Use `repo=N` list
+entries (compatible with the built-in YAML subset) or a mapping if your loader
+supports nested maps.
+
 Curated Vue SFCs (`vue_component`) are indexed from `src/views/*.vue`,
 `src/system/components/**/*.vue`, and `src/global/components/**/*.vue` (PascalCase
 filenames only).
+
+Java code anchors also include curated persistence layers (`/repository/`,
+`/jooq/`, `/mapper/`, `/specification/`) in addition to controllers/services.
+TypeScript also indexes `src/system/types/**` and `src/global/types/**` as
+`ts_type` (exported `type` / `interface` symbols), plus common Node/Express
+patterns (`*-router.ts`, `*-repository.ts`, `*-middleware.ts`, `*-factory.ts`,
+`config.ts`, and one-level `src/<module>/index.ts` barrels).
 
 ## Index security model
 

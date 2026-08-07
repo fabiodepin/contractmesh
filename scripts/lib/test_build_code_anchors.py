@@ -16,8 +16,13 @@ from contractmesh.engine.build_code_anchors import (
     extract_java_classes,
     extract_yaml_blocks,
     index_java_file,
+    index_typescript_file,
     index_vue_file,
+    infer_java_anchor_type,
+    normalize_cap_by_repo,
     resolve_cap_per_repo,
+    resolve_repo_cap,
+    should_index_java,
 )
 from contractmesh.engine.chunk_ids import chunk_id_for, parse_chunk_id
 from contractmesh.engine.workspace_search import is_symbol_partial_match
@@ -117,6 +122,121 @@ class TestCollectTsSources(unittest.TestCase):
             found = {p.name for p in collect_ts_sources(ws, ".")}
             self.assertIn("AuthService.ts", found)
             self.assertNotIn("index.ts", found)
+
+
+class TestCapByRepo(unittest.TestCase):
+    def test_normalize_list_and_mapping(self) -> None:
+        self.assertEqual(
+            normalize_cap_by_repo(["billing-api=1200", "helpdesk-api=1600"]),
+            {"billing-api": 1200, "helpdesk-api": 1600},
+        )
+        self.assertEqual(
+            normalize_cap_by_repo({"billing-api": "900"}),
+            {"billing-api": 900},
+        )
+        self.assertEqual(
+            resolve_repo_cap(
+                "billing-api",
+                default_cap=500,
+                cap_by_repo={"billing-api": 1200},
+            ),
+            1200,
+        )
+        self.assertEqual(
+            resolve_repo_cap("other-api", default_cap=500, cap_by_repo={"billing-api": 1200}),
+            500,
+        )
+
+
+class TestJavaTsCuration(unittest.TestCase):
+    def test_node_router_and_module_barrel_globs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            router = ws / "gateway" / "src" / "internal" / "channels-router.ts"
+            router.parent.mkdir(parents=True)
+            router.write_text(
+                "export const channelsRouter = {}\n", encoding="utf-8"
+            )
+            barrel = ws / "gateway" / "src" / "auth" / "index.ts"
+            barrel.parent.mkdir(parents=True)
+            barrel.write_text(
+                "export function signRequest(): string { return '' }\n",
+                encoding="utf-8",
+            )
+            nested_index = ws / "gateway" / "src" / "auth" / "nested" / "index.ts"
+            nested_index.parent.mkdir(parents=True)
+            nested_index.write_text("export const skip = 1\n", encoding="utf-8")
+            found = {p.relative_to(ws / "gateway").as_posix() for p in collect_ts_sources(ws, "gateway")}
+            self.assertIn("src/internal/channels-router.ts", found)
+            self.assertIn("src/auth/index.ts", found)
+            self.assertNotIn("src/auth/nested/index.ts", found)
+            chunks = ws / ".contractmesh" / "index" / "chunks"
+            entries = index_typescript_file(
+                ws,
+                router,
+                router.relative_to(ws).as_posix(),
+                "gateway",
+                chunks,
+                {},
+                58,
+            )
+            self.assertEqual(entries[0][0]["anchor_type"], "ts_router")
+            self.assertEqual(entries[0][0]["symbol"], "channelsRouter")
+
+    def test_repository_and_mapper_hints(self) -> None:
+        self.assertTrue(
+            should_index_java(
+                Path("demo/src/main/java/demo/repository/FooRepository.java")
+            )
+        )
+        self.assertTrue(
+            should_index_java(
+                Path("demo/src/main/java/demo/repository/jooq/FooJooqRepository.java")
+            )
+        )
+        self.assertTrue(
+            should_index_java(Path("demo/src/main/java/demo/mapper/FooMapper.java"))
+        )
+        self.assertFalse(
+            should_index_java(Path("demo/src/main/java/demo/model/FooModel.java"))
+        )
+        self.assertEqual(
+            infer_java_anchor_type(
+                "demo/src/main/java/demo/repository/FooRepository.java",
+                "FooRepository",
+            ),
+            "repository",
+        )
+        self.assertEqual(
+            infer_java_anchor_type(
+                "demo/src/main/java/demo/mapper/FooMapper.java",
+                "FooMapper",
+            ),
+            "mapper",
+        )
+
+    def test_system_types_exports_as_ts_type(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            rel = "demo-view/src/system/types/ticket.ts"
+            path = ws / rel
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                "export type TicketModel = { id: number }\n"
+                "export interface FieldMapping { id: number | null }\n",
+                encoding="utf-8",
+            )
+            (ws / "demo-view/src/system/types/ticket.test.ts").write_text(
+                "export type Ignored = number\n", encoding="utf-8"
+            )
+            found = {p.name for p in collect_ts_sources(ws, "demo-view")}
+            self.assertIn("ticket.ts", found)
+            self.assertNotIn("ticket.test.ts", found)
+            chunks = ws / ".contractmesh" / "index" / "chunks"
+            entries = index_typescript_file(ws, path, rel, "demo-view", chunks, {}, 58)
+            types = {m["symbol"]: m["anchor_type"] for m, _, _ in entries}
+            self.assertEqual(types.get("TicketModel"), "ts_type")
+            self.assertEqual(types.get("FieldMapping"), "ts_type")
 
 
 class TestVueAndCap(unittest.TestCase):

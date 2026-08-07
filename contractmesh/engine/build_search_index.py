@@ -842,6 +842,7 @@ def main() -> int:
         weight=WEIGHT_BY_KIND["code_anchor"],
         policy=policy,
         cap_per_repo=index_flags.get("code_anchor_cap_per_repo"),
+        cap_by_repo=index_flags.get("code_anchor_cap_by_repo"),
     )
     for m, l, n in anchor_entries:
         apply_trust_fields(m)

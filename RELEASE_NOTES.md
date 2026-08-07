@@ -10,6 +10,18 @@
 - **Curated Vue SFC anchors** — PascalCase components under `src/views/*.vue`,
   `src/system/components/**`, and `src/global/components/**` are indexed as
   `vue_component`. `index --explain` reports curated vs skipped `.vue` paths.
+- **Broader Java/TS curations** — Java anchors also collect repository/jOOQ,
+  mapper, and specification paths (still skipping bulk DTO/model/payload trees).
+  TypeScript collects `system/types/**` and `global/types/**` (`export type` /
+  `interface` → `ts_type`). Truncation still prefers controllers/services/
+  repositories first.
+- **Node/Express TS patterns** — curated globs for `*-router.ts`,
+  `*-repository.ts`, `*-middleware.ts`, `*-factory.ts`, `config.ts`, and
+  one-level `src/<module>/index.ts` barrels (generic backend layouts, not
+  product-specific). Also recognizes `export async function` symbols.
+- **Per-repo anchor caps** — `index.code_anchor_cap_by_repo` overrides the
+  default `code_anchor_cap_per_repo` for named repositories
+  (`- billing-api=1200`). Keeps small repos lean while allowing large API trees.
 
 ## v0.1.8
 

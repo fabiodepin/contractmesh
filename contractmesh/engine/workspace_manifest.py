@@ -32,6 +32,8 @@ DEFAULT_INDEX = {
     "adapters": [],
     # Max code/test anchors kept per repo after type-priority truncation.
     "code_anchor_cap_per_repo": 500,
+    # Optional per-repo overrides (list of "repo=N" or mapping).
+    "code_anchor_cap_by_repo": [],
 }
 DEFAULT_PREFLIGHT = {
     "high_min_score": 6,
@@ -147,6 +149,11 @@ def normalize_manifest(data: dict[str, Any], source: str) -> dict[str, Any]:
                 index[key] = [value.strip().strip("\"'")]
             else:
                 index[key] = []
+            continue
+        if key == "code_anchor_cap_by_repo":
+            from .build_code_anchors import normalize_cap_by_repo
+
+            index[key] = normalize_cap_by_repo(value)
             continue
         if key == "mode":
             # Preserve the declared value (including invalid) for fail-closed validation.

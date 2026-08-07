@@ -192,8 +192,9 @@ def explain_index_path(workspace: Path, path: str | Path) -> dict[str, Any]:
         payload["indexed_as"] = None
         payload["why_not_indexed"] = (
             "typescript_not_in_curated_patterns — anchors collect */src files matching "
-            "patterns such as *Service.ts, *Page.tsx, *Store.ts, api-client.ts "
-            "(not every .ts file)"
+            "patterns such as *Service.ts, *Page.tsx, *Store.ts, *-router.ts, "
+            "*-repository.ts, *-middleware.ts, config.ts, src/<module>/index.ts, "
+            "system/types/**, global/types/** (not every .ts file)"
         )
         return payload
 
