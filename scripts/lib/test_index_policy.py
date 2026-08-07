@@ -254,7 +254,7 @@ index:
             docs = collect_workspace_docs(ws, policy=policy)
             rels = [rel for _p, rel in docs]
             self.assertIn("docs/contracts/example-contract.md", rels)
-            anchors, _ = collect_code_anchors(
+            anchors, _, _ = collect_code_anchors(
                 ws,
                 ["app=."],
                 ws / ".contractmesh" / "index" / "chunks",

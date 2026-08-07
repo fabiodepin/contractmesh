@@ -9,10 +9,15 @@ from pathlib import Path
 
 from contractmesh.engine.build_code_anchors import (
     anchor_id_for,
+    anchor_sort_key,
+    collect_code_anchors,
     collect_ts_sources,
+    collect_vue_sources,
     extract_java_classes,
     extract_yaml_blocks,
     index_java_file,
+    index_vue_file,
+    resolve_cap_per_repo,
 )
 from contractmesh.engine.chunk_ids import chunk_id_for, parse_chunk_id
 from contractmesh.engine.workspace_search import is_symbol_partial_match
@@ -112,6 +117,74 @@ class TestCollectTsSources(unittest.TestCase):
             found = {p.name for p in collect_ts_sources(ws, ".")}
             self.assertIn("AuthService.ts", found)
             self.assertNotIn("index.ts", found)
+
+
+class TestVueAndCap(unittest.TestCase):
+    def test_resolve_cap_accepts_string_from_yaml_subset(self) -> None:
+        self.assertEqual(resolve_cap_per_repo("850"), 850)
+        self.assertEqual(resolve_cap_per_repo(850), 850)
+        self.assertEqual(resolve_cap_per_repo(None), 500)
+
+    def test_collect_vue_curated_paths_and_pascal_stem(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            repo = "demo-view"
+            view = ws / repo / "src" / "views" / "TicketsView.vue"
+            view.parent.mkdir(parents=True)
+            view.write_text("<template><div /></template>\n", encoding="utf-8")
+            kebab = ws / repo / "src" / "views" / "tickets-view.vue"
+            kebab.write_text("<template><div /></template>\n", encoding="utf-8")
+            other = ws / repo / "src" / "components" / "Misc.vue"
+            other.parent.mkdir(parents=True)
+            other.write_text("<template><div /></template>\n", encoding="utf-8")
+            found = {p.name for p in collect_vue_sources(ws, repo)}
+            self.assertIn("TicketsView.vue", found)
+            self.assertIn("tickets-view.vue", found)
+            self.assertNotIn("Misc.vue", found)
+            chunks = ws / ".contractmesh" / "index" / "chunks"
+            entries = index_vue_file(
+                ws, view, view.relative_to(ws).as_posix(), repo, chunks, {}, 58
+            )
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0][0]["anchor_type"], "vue_component")
+            skipped = index_vue_file(
+                ws, kebab, kebab.relative_to(ws).as_posix(), repo, chunks, {}, 58
+            )
+            self.assertEqual(skipped, [])
+
+    def test_truncate_keeps_higher_priority_anchor_types(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            (ws / "contractmesh.yml").write_text(
+                "name: demo\nmode: default\nrepos:\n"
+                "  - path: demo-api\n    name: demo-api\n"
+                "index:\n  mode: allowlist\n  include:\n    - demo-api:src/**\n",
+                encoding="utf-8",
+            )
+            java_root = ws / "demo-api" / "src" / "main" / "java" / "demo"
+            java_root.mkdir(parents=True)
+            (java_root / "controllers").mkdir()
+            (java_root / "controllers" / "DemoController.java").write_text(
+                "public class DemoController {}\n", encoding="utf-8"
+            )
+            (java_root / "entity").mkdir()
+            for i in range(5):
+                (java_root / "entity" / f"Thing{i}.java").write_text(
+                    f"public class Thing{i} {{}}\n", encoding="utf-8"
+                )
+            chunks = ws / ".contractmesh" / "index" / "chunks"
+            entries, counts, truncated = collect_code_anchors(
+                ws,
+                ["demo-api=demo-api"],
+                chunks,
+                {},
+                cap_per_repo=2,
+            )
+            self.assertEqual(counts["demo-api"], 2)
+            self.assertIn("demo-api", truncated)
+            types = [m["anchor_type"] for m, _, _ in entries]
+            self.assertIn("controller", types)
+            self.assertEqual(anchor_sort_key(entries[0])[0], 0)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,16 @@
 # ContractMesh Release Notes
 
+## v0.1.9
+
+- **Configurable code-anchor cap** — `index.code_anchor_cap_per_repo` (default
+  `500`) controls how many code/test anchors are kept per repo. Excess is
+  truncated after sorting by `anchor_type` priority (controllers/services first)
+  and document `weight`, not discovery order. Truncation stats appear in
+  `build_stats.code_anchors_truncated`.
+- **Curated Vue SFC anchors** — PascalCase components under `src/views/*.vue`,
+  `src/system/components/**`, and `src/global/components/**` are indexed as
+  `vue_component`. `index --explain` reports curated vs skipped `.vue` paths.
+
 ## v0.1.8
 
 - **Brownfield-safe `init`** — default `contractmesh init` no longer writes

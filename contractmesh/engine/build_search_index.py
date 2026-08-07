@@ -834,13 +834,14 @@ def main() -> int:
         local_docs.append(l)
         total_chunks += n
 
-    anchor_entries, anchor_by_repo = collect_code_anchors(
+    anchor_entries, anchor_by_repo, anchor_truncation = collect_code_anchors(
         workspace,
         [f"{s.name}={s.rel_path}" for s in repo_specs],
         chunks_root,
         roles,
         weight=WEIGHT_BY_KIND["code_anchor"],
         policy=policy,
+        cap_per_repo=index_flags.get("code_anchor_cap_per_repo"),
     )
     for m, l, n in anchor_entries:
         apply_trust_fields(m)
@@ -921,6 +922,7 @@ def main() -> int:
             "structural_edge_count": len(structural_edges),
             "drift_finding_count": len(drift_findings),
             "evolution_link_count": len(evolution_links),
+            "code_anchors_truncated": anchor_truncation,
             "index_flags": index_flags,
             "index_policy": policy.summary(),
         },
@@ -958,6 +960,12 @@ def main() -> int:
     print(f"  documents={len(manifest_docs)}")
     print(f"  code_anchors={code_anchor_count}")
     print(f"  test_anchors={test_anchor_count}")
+    if anchor_truncation:
+        for repo, stats in sorted(anchor_truncation.items()):
+            print(
+                f"  code_anchors_truncated: {repo} "
+                f"dropped={stats['dropped']} kept={stats['kept']}/{stats['total']}"
+            )
     if code_anchor_by_repo:
         top = ", ".join(f"{k}={v}" for k, v in sorted(code_anchor_by_repo.items())[:8])
         more = " ..." if len(code_anchor_by_repo) > 8 else ""

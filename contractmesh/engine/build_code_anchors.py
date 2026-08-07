@@ -16,10 +16,45 @@ from .index_policy import IndexPolicy, load_index_policy
 
 CHUNK_STRATEGY = "code-anchor-v1"
 ANCHOR_MAX_BYTES = 8 * 1024
-CAP_PER_REPO = 500
+# Default when contractmesh.yml omits index.code_anchor_cap_per_repo.
+DEFAULT_CAP_PER_REPO = 500
+# Back-compat alias for callers/tests that imported CAP_PER_REPO.
+CAP_PER_REPO = DEFAULT_CAP_PER_REPO
 
 YAML_ROOT_KEYS = frozenset(
     {"api", "auth", "jwt", "spring", "redis", "datasource", "server"}
+)
+
+# Lower rank = keep first when truncating to the per-repo cap.
+ANCHOR_TYPE_PRIORITY = {
+    "controller": 0,
+    "service_impl": 1,
+    "service": 2,
+    "client": 3,
+    "filter": 4,
+    "multitenancy": 5,
+    "annotation": 6,
+    "mapper": 6,
+    "config": 7,
+    "yaml_block": 8,
+    "ts_service": 9,
+    "ts_page": 9,
+    "ts_store": 9,
+    "ts_type": 9,
+    "vue_component": 10,
+    "go_type": 10,
+    "go_func": 11,
+    "python_type": 11,
+    "support": 12,
+    "entity": 12,
+    "java_type": 13,
+    "test": 40,
+}
+
+VUE_COMPONENT_GLOBS = (
+    "**/src/global/components/**/*.vue",
+    "**/src/system/components/**/*.vue",
+    "**/src/views/*.vue",
 )
 
 JAVA_CLASS_RE = re.compile(
@@ -777,6 +812,73 @@ def collect_yaml_configs(workspace: Path, repo_path: str) -> list[Path]:
     return out
 
 
+def index_vue_file(
+    workspace: Path,
+    abs_path: Path,
+    rel_path: str,
+    repo: str,
+    chunks_root: Path,
+    roles: dict[str, str],
+    weight: int,
+) -> list[tuple[dict, dict, int]]:
+    symbol = abs_path.stem
+    if not PASCAL_RE.match(symbol):
+        return []
+    text = abs_path.read_text(encoding="utf-8", errors="replace")
+    excerpt = text[:ANCHOR_MAX_BYTES]
+    return [
+        write_anchor(
+            workspace,
+            chunks_root,
+            repo,
+            rel_path,
+            symbol,
+            f"{symbol} ({repo})",
+            excerpt,
+            "vue_component",
+            "vue",
+            1,
+            min(len(text.splitlines()), 120),
+            roles,
+            weight,
+        )
+    ]
+
+
+def collect_vue_sources(workspace: Path, repo_path: str) -> list[Path]:
+    """Curated Vue SFCs: top-level views + system/global components."""
+    base = workspace / repo_path
+    if not base.is_dir():
+        return []
+    found: set[Path] = set()
+    for pattern in VUE_COMPONENT_GLOBS:
+        for p in base.glob(pattern):
+            if p.is_file() and "node_modules" not in p.parts:
+                found.add(p)
+    return sorted(found)
+
+
+def resolve_cap_per_repo(raw: object | None) -> int:
+    """Parse index.code_anchor_cap_per_repo (YAML subset may yield str)."""
+    if raw is None or raw is False or raw == "":
+        return DEFAULT_CAP_PER_REPO
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return DEFAULT_CAP_PER_REPO
+    return max(1, value)
+
+
+def anchor_sort_key(entry: tuple[dict, dict, int]) -> tuple[int, int, str]:
+    """Prefer high-signal anchor types, then higher doc weight, then path."""
+    manifest = entry[0]
+    atype = str(manifest.get("anchor_type") or "")
+    type_rank = ANCHOR_TYPE_PRIORITY.get(atype, 50)
+    # Negate so higher document weight sorts earlier (stable with type rank).
+    doc_weight = -int(manifest.get("weight") or 0)
+    return (type_rank, doc_weight, str(manifest.get("path") or ""))
+
+
 def collect_code_anchors(
     workspace: Path,
     repos: list[str],
@@ -785,11 +887,18 @@ def collect_code_anchors(
     *,
     weight: int = 58,
     policy: IndexPolicy | None = None,
-) -> tuple[list[tuple[dict, dict, int]], dict[str, int]]:
-    """Return (entries, per_repo_counts) for all code_anchor documents."""
+    cap_per_repo: int | None = None,
+) -> tuple[list[tuple[dict, dict, int]], dict[str, int], dict[str, dict[str, int]]]:
+    """Return (entries, per_repo_counts, truncation_by_repo)."""
     all_entries: list[tuple[dict, dict, int]] = []
     per_repo: dict[str, int] = {}
+    truncation_by_repo: dict[str, dict[str, int]] = {}
     policy = policy or load_index_policy(workspace)
+    cap = (
+        DEFAULT_CAP_PER_REPO
+        if cap_per_repo is None
+        else resolve_cap_per_repo(cap_per_repo)
+    )
 
     def visible(paths: list[Path]) -> list[Path]:
         return [p for p in paths if not policy.ignores(p)]
@@ -826,6 +935,14 @@ def collect_code_anchors(
                 )
             )
 
+        for abs_path in visible(collect_vue_sources(workspace, repo_path)):
+            rel = abs_path.relative_to(workspace).as_posix()
+            repo_entries.extend(
+                index_vue_file(
+                    workspace, abs_path, rel, repo, chunks_root, roles, weight
+                )
+            )
+
         for abs_path in visible(collect_go_sources(workspace, repo_path, policy)):
             rel = abs_path.relative_to(workspace).as_posix()
             repo_entries.extend(
@@ -856,14 +973,23 @@ def collect_code_anchors(
                 )
             )
 
-        if len(repo_entries) > CAP_PER_REPO:
+        if len(repo_entries) > cap:
+            repo_entries.sort(key=anchor_sort_key)
+            total = len(repo_entries)
+            dropped = total - cap
+            truncation_by_repo[repo] = {
+                "total": total,
+                "kept": cap,
+                "dropped": dropped,
+            }
             print(
                 f"[WARN] code_anchor truncated for {repo}: "
-                f"{len(repo_entries)} > {CAP_PER_REPO}",
+                f"dropped {dropped}, kept {cap}/{total} "
+                f"(by anchor_type priority + weight)",
             )
-            repo_entries = repo_entries[:CAP_PER_REPO]
+            repo_entries = repo_entries[:cap]
 
         per_repo[repo] = len(repo_entries)
         all_entries.extend(repo_entries)
 
-    return all_entries, per_repo
+    return all_entries, per_repo, truncation_by_repo

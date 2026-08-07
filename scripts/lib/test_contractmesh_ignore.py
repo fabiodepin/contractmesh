@@ -93,7 +93,7 @@ index:
                 encoding="utf-8",
             )
 
-            entries, _counts = collect_code_anchors(
+            entries, _counts, _trunc = collect_code_anchors(
                 ws,
                 ["billing-api=services/billing-api"],
                 ws / ".contractmesh" / "index" / "chunks",

@@ -106,10 +106,21 @@ index:
   openapi: false
   drift: false
   adapters: []
+  # Max code/test anchors kept per repo (default 500). Excess is dropped after
+  # sorting by anchor_type priority (controllers/services first), then weight.
+  code_anchor_cap_per_repo: 500
 ```
 
 Boolean feature flags default to `false`. **`index.mode` is required** and has no
 silent fallback.
+
+`code_anchor_cap_per_repo` defaults to `500`. Raise it for large monorepos (e.g. `850`)
+when curated collectors still exceed the cap. Truncation prefers high-signal
+`anchor_type` values and higher document `weight`, not discovery order.
+
+Curated Vue SFCs (`vue_component`) are indexed from `src/views/*.vue`,
+`src/system/components/**/*.vue`, and `src/global/components/**/*.vue` (PascalCase
+filenames only).
 
 ## Index security model
 

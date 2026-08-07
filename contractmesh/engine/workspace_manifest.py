@@ -30,6 +30,8 @@ DEFAULT_INDEX = {
     "openapi": False,
     "drift": False,
     "adapters": [],
+    # Max code/test anchors kept per repo after type-priority truncation.
+    "code_anchor_cap_per_repo": 500,
 }
 DEFAULT_PREFLIGHT = {
     "high_min_score": 6,

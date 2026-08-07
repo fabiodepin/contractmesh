@@ -14,6 +14,7 @@ from .build_code_anchors import (
     collect_python_tests,
     collect_ts_sources,
     collect_ts_tests,
+    collect_vue_sources,
 )
 from .build_search_index import OPENAPI_BASENAMES, infer_kind, manifest_doc_roots
 from .index_policy import IndexPolicy, load_index_policy
@@ -193,6 +194,22 @@ def explain_index_path(workspace: Path, path: str | Path) -> dict[str, Any]:
             "typescript_not_in_curated_patterns — anchors collect */src files matching "
             "patterns such as *Service.ts, *Page.tsx, *Store.ts, api-client.ts "
             "(not every .ts file)"
+        )
+        return payload
+
+    if suffix == ".vue":
+        _repo_name, repo_path = policy.resolve_repo(rel)
+        if not repo_path:
+            repo_path = "."
+        collected = {p.resolve() for p in collect_vue_sources(workspace, repo_path)}
+        if abs_path.resolve() in collected and abs_path.stem[:1].isupper():
+            payload["indexed_as"] = "code_anchor"
+            payload["why_not_indexed"] = None
+            return payload
+        payload["indexed_as"] = None
+        payload["why_not_indexed"] = (
+            "vue_not_in_curated_patterns — anchors collect PascalCase SFCs under "
+            "src/views/*.vue, src/system/components/**, and src/global/components/**"
         )
         return payload
 
